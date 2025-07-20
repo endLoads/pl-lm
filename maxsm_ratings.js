@@ -344,7 +344,7 @@
     var KP_API_KEYS   = (window.RATINGS_PLUGIN_TOKENS && window.RATINGS_PLUGIN_TOKENS.KP_API_KEYS)   || ['9YFXQ4W-QHBMB35-GJ2WMQ7-7S0PPRR']; // api ключи массивом
     var PROXY_TIMEOUT = 5000; // Таймаут прокси
     var JACRED_PROTOCOL = 'https://'; // Протокол JacRed
-    var JACRED_URL = Lampa.Storage.get('jackett_url'); // Адрес JacRed для получения информации о карточках без протокола (jacred.xyz)
+    var JACRED_URL = Lampa.Storage.get('https://jacred.xyz/?ysclid=mdc4333am1528209168'); // Адрес JacRed для получения информации о карточках без протокола (jacred.xyz)
     var JACRED_API_KEY = Lampa.Storage.get('jackett_key'); // api ключ JacRed
     // var JACRED_URL = 'jacred.xyz';
     // var JACRED_API_KEY = '1';
