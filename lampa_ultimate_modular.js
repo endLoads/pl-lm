@@ -389,6 +389,146 @@
         }
     });
 
+    // --- Модуль "VPN Checker" ---
+    LampaUltimate.modules.vpn = Object.assign(LampaUltimate.modules.vpn, {
+        mode: 'detailed', // detailed | short
+        enabled: false,
+        lastResult: null,
+        lastCheck: 0,
+        cacheTtl: 10 * 60 * 1000, // 10 минут
+        indicator: null,
+        init() {
+            LampaUltimate.settings.vpn = LampaUltimate.settings.vpn || {
+                enabled: false,
+                mode: 'detailed'
+            };
+            this.enabled = LampaUltimate.settings.vpn.enabled;
+            this.mode = LampaUltimate.settings.vpn.mode;
+            // Если включено — запускаем проверку
+            if (this.enabled) this.checkAndRender();
+        },
+        checkAndRender(force) {
+            if (!this.enabled) return this.removeIndicator();
+            let now = Date.now();
+            if (!force && this.lastResult && (now - this.lastCheck < this.cacheTtl)) {
+                this.renderIndicator(this.lastResult);
+                return;
+            }
+            this.renderIndicator({status:'loading'});
+            this.checkVPN().then(res => {
+                this.lastResult = res;
+                this.lastCheck = Date.now();
+                this.renderIndicator(res);
+            }).catch(() => {
+                this.renderIndicator({status:'error'});
+            });
+        },
+        async checkVPN() {
+            // Пробуем несколько API по очереди
+            let apis = [
+                async () => {
+                    let r = await fetch('https://ip-api.io/json/');
+                    let d = await r.json();
+                    return {
+                        status: d.security && (d.security.is_vpn || d.security.is_proxy || d.security.is_tor) ? 'vpn' : 'ok',
+                        country: d.country_name,
+                        city: d.city,
+                        asn: d.asn,
+                        org: d.org,
+                        ip: d.ip,
+                        details: d.security
+                    };
+                },
+                async () => {
+                    let r = await fetch('https://ipinfo.io/json');
+                    let d = await r.json();
+                    return {
+                        status: d.privacy && (d.privacy.vpn || d.privacy.proxy || d.privacy.tor) ? 'vpn' : 'ok',
+                        country: d.country,
+                        city: d.city,
+                        asn: d.org,
+                        org: d.org,
+                        ip: d.ip,
+                        details: d.privacy
+                    };
+                },
+                async () => {
+                    let r = await fetch('https://vpnapi.io/api/?ip=&key=free');
+                    let d = await r.json();
+                    return {
+                        status: d.security && (d.security.vpn || d.security.proxy || d.security.tor) ? 'vpn' : 'ok',
+                        country: d.location && d.location.country,
+                        city: d.location && d.location.city,
+                        asn: d.network && d.network.autonomous_system_number,
+                        org: d.network && d.network.organization,
+                        ip: d.ip,
+                        details: d.security
+                    };
+                }
+            ];
+            for (let api of apis) {
+                try {
+                    let res = await api();
+                    if (res && res.status) return res;
+                } catch(e) {}
+            }
+            return {status:'error'};
+        },
+        renderIndicator(res) {
+            this.removeIndicator();
+            let ind = document.createElement('div');
+            ind.id = 'lampa-ultimate-vpn-indicator';
+            ind.style = 'position:fixed;bottom:24px;right:24px;z-index:999999;background:rgba(20,20,40,0.95);color:#fff;padding:12px 20px;border-radius:16px;box-shadow:0 2px 12px #0008;font-size:1.1em;display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none;transition:opacity 0.2s;';
+            let icon = '';
+            let color = '#00dbde';
+            if (res.status === 'loading') {
+                icon = '⏳';
+                color = '#aaa';
+            } else if (res.status === 'ok') {
+                icon = '🟢';
+                color = '#00dbde';
+            } else if (res.status === 'vpn') {
+                icon = '🔴';
+                color = '#fc00ff';
+            } else {
+                icon = '⚠️';
+                color = '#ffb300';
+            }
+            ind.innerHTML = `<span style="font-size:1.5em;">${icon}</span><span>${this.mode==='detailed'?this.statusText(res):this.shortText(res)}</span>`;
+            ind.style.border = `2px solid ${color}`;
+            // Клик — показать подробности
+            ind.onclick = () => {
+                if (this.mode === 'detailed' && res.status && res.status !== 'loading') {
+                    alert(this.detailedInfo(res));
+                } else {
+                    this.checkAndRender(true);
+                }
+            };
+            document.body.appendChild(ind);
+            this.indicator = ind;
+        },
+        removeIndicator() {
+            if (this.indicator) this.indicator.remove();
+            this.indicator = null;
+        },
+        statusText(res) {
+            if (res.status === 'loading') return 'Проверка VPN...';
+            if (res.status === 'ok') return 'VPN не обнаружен';
+            if (res.status === 'vpn') return 'Обнаружен VPN/Proxy/TOR!';
+            return 'Ошибка проверки VPN';
+        },
+        shortText(res) {
+            if (res.status === 'loading') return 'Проверка...';
+            if (res.status === 'ok') return 'VPN: нет';
+            if (res.status === 'vpn') return 'VPN: да!';
+            return 'VPN: ?';
+        },
+        detailedInfo(res) {
+            if (!res || !res.status) return 'Нет данных';
+            return `IP: ${res.ip||'-'}\nСтрана: ${res.country||'-'}\nГород: ${res.city||'-'}\nПровайдер: ${res.org||'-'}\nASN: ${res.asn||'-'}\nVPN/Proxy/TOR: ${res.status==='vpn'?'ДА':'нет'}\n\n${res.details?JSON.stringify(res.details,null,2):''}`;
+        }
+    });
+
     // --- Добавляем настройки бейджей в меню ---
     const origRenderTab = LampaUltimate.renderCustomMenu;
     LampaUltimate.renderCustomMenu = function() {
@@ -444,6 +584,16 @@
                             </label>
                         </div>`;
                     }
+                    if (key === 'vpn') {
+                        html += `<div style="margin-left:30px;margin-top:5px;">
+                            <label>Режим:
+                                <select id="vpn-mode">
+                                    <option value="detailed" ${LampaUltimate.settings.vpn.mode==='detailed'?'selected':''}>Подробный</option>
+                                    <option value="short" ${LampaUltimate.settings.vpn.mode==='short'?'selected':''}>Краткий</option>
+                                </select>
+                            </label>
+                        </div>`;
+                    }
                     html += '</li>';
                 });
                 html += '</ul>';
@@ -481,6 +631,14 @@
                     LampaUltimate.settings.logos.fallback = logoFallbackSel.value;
                     LampaUltimate.modules.logos.fallback = logoFallbackSel.value;
                     LampaUltimate.saveSettings();
+                };
+                // Настройки VPN
+                let vpnModeSel = content.querySelector('#vpn-mode');
+                if (vpnModeSel) vpnModeSel.onchange = function() {
+                    LampaUltimate.settings.vpn.mode = vpnModeSel.value;
+                    LampaUltimate.modules.vpn.mode = vpnModeSel.value;
+                    LampaUltimate.saveSettings();
+                    LampaUltimate.modules.vpn.checkAndRender(true);
                 };
             };
         }
