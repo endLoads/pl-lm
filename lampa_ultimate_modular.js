@@ -731,7 +731,6 @@ Lampa Ultimate Modular Plugin
     // --- Модуль "Избранное и коллекции" ---
     LampaUltimate.modules.collections = {
         enabled: true,
-        name: 'Избранное и коллекции',
         lists: {}, // {listName: [cardId, ...]}
         init() {
             // Загрузка коллекций из localStorage
@@ -749,9 +748,7 @@ Lampa Ultimate Modular Plugin
                     setTimeout(() => {
                         try {
                             if (!el) return;
-                            // Удаляем старые кнопки
                             el.querySelectorAll('.ultimate-collection-btn').forEach(b => b.remove());
-                            // Быстрые кнопки для коллекций
                             Object.keys(LampaUltimate.modules.collections.lists).forEach(listName => {
                                 let btn = document.createElement('button');
                                 btn.className = 'ultimate-collection-btn';
@@ -807,85 +804,89 @@ Lampa Ultimate Modular Plugin
         }
     };
 
-    // --- Добавляем вкладку "Коллекции" в меню ---
-    const origRenderTabCollections = LampaUltimate.renderCustomMenu;
-    LampaUltimate.renderCustomMenu = function() {
-        origRenderTabCollections.call(this);
-        // Добавляем вкладку "Коллекции"
-        let tabsBar = document.getElementById('lampa-ultimate-tabs');
-        if (tabsBar && !Array.from(tabsBar.children).find(btn => btn.dataset.tab === 'collections')) {
-            let btn = document.createElement('button');
-            btn.textContent = 'Коллекции';
-            btn.dataset.tab = 'collections';
-            btn.style = 'background:none;border:none;color:#fff;font-size:1.1em;padding:10px 0 8px 0;cursor:pointer;';
-            btn.onclick = () => renderTab('collections');
-            tabsBar.appendChild(btn);
-        }
-        // Переопределяем рендер вкладки
-        let content = document.getElementById('lampa-ultimate-content');
-        function renderTab(tabId) {
-            Array.from(tabsBar.children).forEach(btn => btn.style.borderBottom = 'none');
-            let activeBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === tabId);
-            if (activeBtn) activeBtn.style.borderBottom = '2px solid #00dbde';
-            if (tabId === 'collections') {
-                let html = `<h3>Мои коллекции</h3><ul style="list-style:none;padding:0;">`;
-                Object.keys(LampaUltimate.modules.collections.lists).forEach(listName => {
-                    html += `<li style="margin-bottom:10px;"><b>${listName}</b> <button data-list="${listName}" class="ultimate-collection-show">Показать</button> <button data-list="${listName}" class="ultimate-collection-del">Удалить</button></li>`;
-                });
-                html += '</ul>';
-                html += `<button id="ultimate-collection-add">Добавить коллекцию</button> <button id="ultimate-collection-export">Экспорт</button> <button id="ultimate-collection-import">Импорт</button> <button id="ultimate-collection-share">Поделиться</button>`;
-                content.innerHTML = html;
-                // Показать коллекцию (alert, можно доработать под отдельный UI)
-                content.querySelectorAll('.ultimate-collection-show').forEach(btn => {
-                    btn.onclick = function() {
-                        let name = btn.dataset.list;
-                        let ids = LampaUltimate.modules.collections.lists[name];
-                        alert(`В коллекции "${name}":\n` + ids.join(', '));
-                    };
-                });
-                // Удалить коллекцию
-                content.querySelectorAll('.ultimate-collection-del').forEach(btn => {
-                    btn.onclick = function() {
-                        let name = btn.dataset.list;
-                        if (confirm('Удалить коллекцию ' + name + '?')) {
-                            delete LampaUltimate.modules.collections.lists[name];
-                            localStorage.setItem('lampa_ultimate_collections', JSON.stringify(LampaUltimate.modules.collections.lists));
-                            renderTab('collections');
-                        }
-                    };
-                });
-                // Добавить коллекцию
-                let addBtn = content.querySelector('#ultimate-collection-add');
-                if (addBtn) addBtn.onclick = function() {
-                    let name = prompt('Название новой коллекции:');
-                    if (name && !LampaUltimate.modules.collections.lists[name]) {
-                        LampaUltimate.modules.collections.lists[name] = [];
-                        localStorage.setItem('lampa_ultimate_collections', JSON.stringify(LampaUltimate.modules.collections.lists));
-                        renderTab('collections');
-                    }
-                };
-                // Экспорт
-                let exportBtn = content.querySelector('#ultimate-collection-export');
-                if (exportBtn) exportBtn.onclick = function() {
-                    prompt('JSON для экспорта:', LampaUltimate.modules.collections.export());
-                };
-                // Импорт
-                let importBtn = content.querySelector('#ultimate-collection-import');
-                if (importBtn) importBtn.onclick = function() {
-                    let json = prompt('Вставьте JSON для импорта:');
-                    if (json) {
-                        LampaUltimate.modules.collections.import(json);
-                        renderTab('collections');
-                    }
-                };
-                // Поделиться (генерация ссылки)
-                let shareBtn = content.querySelector('#ultimate-collection-share');
-                if (shareBtn) shareBtn.onclick = function() {
-                    prompt('Ссылка для импорта коллекций:', LampaUltimate.modules.collections.exportLink());
-                };
+    // --- UI для управления коллекциями во вкладке 'Коллекции' ---
+    LampaUltimate.renderCollectionsTab = function(content) {
+        let html = `<h3>Мои коллекции</h3><ul style="list-style:none;padding:0;">`;
+        Object.keys(LampaUltimate.modules.collections.lists).forEach(listName => {
+            html += `<li style="margin-bottom:10px;"><b>${listName}</b> <button data-list="${listName}" class="ultimate-collection-show">Показать</button> <button data-list="${listName}" class="ultimate-collection-del">Удалить</button></li>`;
+        });
+        html += '</ul>';
+        html += `<button id="ultimate-collection-add">Добавить коллекцию</button> <button id="ultimate-collection-export">Экспорт</button> <button id="ultimate-collection-import">Импорт</button> <button id="ultimate-collection-share">Поделиться</button>`;
+        content.innerHTML = html;
+        // Показать коллекцию (alert, можно доработать под отдельный UI)
+        content.querySelectorAll('.ultimate-collection-show').forEach(btn => {
+            btn.onclick = function() {
+                let name = btn.dataset.list;
+                let ids = LampaUltimate.modules.collections.lists[name];
+                alert(`В коллекции "${name}":\n` + ids.join(', '));
+            };
+        });
+        // Удалить коллекцию
+        content.querySelectorAll('.ultimate-collection-del').forEach(btn => {
+            btn.onclick = function() {
+                let name = btn.dataset.list;
+                if (confirm('Удалить коллекцию ' + name + '?')) {
+                    delete LampaUltimate.modules.collections.lists[name];
+                    localStorage.setItem('lampa_ultimate_collections', JSON.stringify(LampaUltimate.modules.collections.lists));
+                    LampaUltimate.renderCollectionsTab(content);
+                }
+            };
+        });
+        // Добавить коллекцию
+        let addBtn = content.querySelector('#ultimate-collection-add');
+        if (addBtn) addBtn.onclick = function() {
+            let name = prompt('Название новой коллекции:');
+            if (name && !LampaUltimate.modules.collections.lists[name]) {
+                LampaUltimate.modules.collections.lists[name] = [];
+                localStorage.setItem('lampa_ultimate_collections', JSON.stringify(LampaUltimate.modules.collections.lists));
+                LampaUltimate.renderCollectionsTab(content);
             }
-        }
+        };
+        // Экспорт
+        let exportBtn = content.querySelector('#ultimate-collection-export');
+        if (exportBtn) exportBtn.onclick = function() {
+            prompt('JSON для экспорта:', LampaUltimate.modules.collections.export());
+        };
+        // Импорт
+        let importBtn = content.querySelector('#ultimate-collection-import');
+        if (importBtn) importBtn.onclick = function() {
+            let json = prompt('Вставьте JSON для импорта:');
+            if (json) {
+                LampaUltimate.modules.collections.import(json);
+                LampaUltimate.renderCollectionsTab(content);
+            }
+        };
+        // Поделиться (генерация ссылки)
+        let shareBtn = content.querySelector('#ultimate-collection-share');
+        if (shareBtn) shareBtn.onclick = function() {
+            prompt('Ссылка для импорта коллекций:', LampaUltimate.modules.collections.exportLink());
+        };
     };
+
+    // --- Встраиваем вкладку 'Коллекции' в меню ---
+    (function patchCollectionsTab() {
+        const origRenderMenu = LampaUltimate.renderMenu;
+        LampaUltimate.renderMenu = function() {
+            origRenderMenu.call(this);
+            // Переопределяем рендер вкладки 'Коллекции'
+            let tabsBar = document.getElementById('lampa-ultimate-tabs');
+            let content = document.getElementById('lampa-ultimate-content');
+            if (!tabsBar || !content) return;
+            let origRenderTab = content.renderTab || function(tabId){};
+            content.renderTab = function(tabId) {
+                if (tabId === 'collections') {
+                    LampaUltimate.renderCollectionsTab(content);
+                } else {
+                    origRenderTab(tabId);
+                }
+            };
+        };
+    })();
+
+    // --- Инициализация коллекций ---
+    setTimeout(() => {
+        if (LampaUltimate.modules.collections && LampaUltimate.modules.collections.init) LampaUltimate.modules.collections.init();
+    }, 1400);
 
     // --- Добавляем настройки фильтров и сортировки в меню ---
     const origRenderTabFilters = LampaUltimate.renderCustomMenu;
