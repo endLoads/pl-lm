@@ -3,10 +3,10 @@
 
     // --- НАСТРОЙКИ ПЛАГИНА ---
     const PLUGIN_NAME = 'Lampa Ultimate Modular';
-    const PLUGIN_VERSION = '1.0.8'; // Обновили версию
+    const PLUGIN_VERSION = '1.0.9'; // Обновили версию
     const THEMES_URL = 'https://endloads.github.io/pl-lm/lampa-ultimate-modular/assets/themes.js';
     const STYLES_URL = 'https://endloads.github.io/pl-lm/lampa-ultimate-modular/assets/styles.css';
-    const ICON_URL = 'https://endloads.github.io/pl-lm/lampa-ultimate-modular/icon.png'; // Ваша иконка
+    const ICON_URL = 'https://endloads.github.io/pl-lm/lampa-ultimate-modular/icon.png';
 
     // --- УТИЛИТЫ ДЛЯ ЗАГРУЗКИ ---
     function loadScript(url) {
@@ -30,29 +30,26 @@
         });
     }
 
-    // --- СОЗДАНИЕ ПОДМЕНЮ ---
-    function createSubmenu() {
-        const submenu = document.createElement('div');
-        submenu.classList.add('settings-folder__content');
+    // --- СОЗДАНИЕ СОДЕРЖИМОГО РАЗДЕЛА ---
+    function createContent() {
+        const content = document.createElement('div');
+        content.classList.add('settings-folder__content');
 
-        const infoBlock = document.createElement('div');
-        infoBlock.classList.add('settings-folder__content-item');
-        infoBlock.innerHTML = [
+        const info = document.createElement('div');
+        info.classList.add('settings-folder__content-item');
+        info.innerHTML = [
             `<div class="settings-folder__title">О плагине</div>`,
             `<div class="settings-folder__description">Версия: <b>${PLUGIN_VERSION}</b><br>Автор: <b>endLoads</b><br>Статус: <b style="color: #4CAF50;">Активен</b></div>`
         ].join('');
-        submenu.appendChild(infoBlock);
+        content.appendChild(info);
 
-        const buttonBlock = document.createElement('div');
-        buttonBlock.classList.add('settings-folder__content-item');
         const button = document.createElement('div');
         button.classList.add('settings-button', 'selector');
         button.innerText = 'Показать уведомление';
         button.addEventListener('click', () => Lampa.Noty.show('Плагин работает!'));
-        buttonBlock.appendChild(button);
-        submenu.appendChild(buttonBlock);
+        content.appendChild(button);
 
-        return submenu;
+        return content;
     }
 
     // --- ИНИЦИАЛИЗАЦИЯ ПЛАГИНА ---
@@ -61,24 +58,28 @@
 
         window.lampa_ultimate_modular = true;
 
-        // Регистрация как категории настроек (чтобы появиться в главном меню как "Интерфейс" или "Плеер")
-        Lampa.Component.add(PLUGIN_NAME.toLowerCase().replace(/\s/g, '_'), {  // Имя компонента для регистрации
-            category: true,  // Флаг, чтобы LAMPA распознала как раздел настроек
+        // Регистрация компонента как категории настроек
+        const componentName = PLUGIN_NAME.toLowerCase().replace(/\s/g, '_');
+        Lampa.Component.add(componentName, {
+            category: true,  // Флаг для распознавания как раздел
             name: PLUGIN_NAME,
-            icon: ICON_URL,  // Иконка для меню
+            icon: ICON_URL,
             version: PLUGIN_VERSION,
+            render: function() {
+                return createContent();  // Рендерим содержимое раздела
+            },
             onRender: function() {
                 console.log(`${PLUGIN_NAME}: Раздел отрисован.`);
-            },
-            render: function() {
-                // Здесь рендерим содержимое раздела (подменю)
-                return createSubmenu();
             }
         });
 
-        // Добавление в список категорий настроек (на основе анализа исходников LAMPA)
+        // Добавление в коллекцию категорий и обновление меню
         Lampa.Settings.listener.follow('addCategory', function(e) {
-            e.categories.push(PLUGIN_NAME.toLowerCase().replace(/\s/g, '_'));  // Добавляем в коллекцию категорий
+            if (!e.categories.includes(componentName)) {
+                e.categories.push(componentName);
+                console.log(`${PLUGIN_NAME}: Добавлен в категории.`);
+                Lampa.Settings.update();  // Обновляем меню для отображения
+            }
         });
 
         // Загрузка тем
