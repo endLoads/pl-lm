@@ -1196,10 +1196,9 @@ Lampa Ultimate Modular Plugin
         }
     };
 
-    // --- Модуль "Темы и кастомизация" ---
+    // === Этап 6: Темы и кастомизация ===
     LampaUltimate.modules.themes = {
         enabled: true,
-        name: 'Темы и кастомизация',
         themes: {
             dark: {
                 name: 'Темная',
@@ -1247,78 +1246,91 @@ Lampa Ultimate Modular Plugin
         }
     };
 
-    // --- Вкладка "Внешний вид" в меню ---
-    const origRenderTabAppearance = LampaUltimate.renderCustomMenu;
-    LampaUltimate.renderCustomMenu = function() {
-        origRenderTabAppearance.call(this);
-        // Переопределяем рендер вкладки "Внешний вид"
-        let tabsBar = document.getElementById('lampa-ultimate-tabs');
-        let content = document.getElementById('lampa-ultimate-content');
-        function renderTab(tabId) {
-            Array.from(tabsBar.children).forEach(btn => btn.style.borderBottom = 'none');
-            let activeBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === tabId);
-            if (activeBtn) activeBtn.style.borderBottom = '2px solid #00dbde';
-            if (tabId === 'appearance') {
-                let t = LampaUltimate.modules.themes;
-                let html = `<h3>Внешний вид</h3>
-                <label>Тема:
-                    <select id="ultimate-theme-select">
-                        ${Object.keys(t.themes).map(key => `<option value="${key}" ${t.current===key?'selected':''}>${t.themes[key].name}</option>`).join('')}
-                    </select>
-                </label>
-                <label style="margin-left:20px;">Размер элементов:
-                    <select id="ultimate-size-select">
-                        <option value="normal" ${t.elementSize==='normal'?'selected':''}>Обычный</option>
-                        <option value="large" ${t.elementSize==='large'?'selected':''}>Крупный</option>
-                        <option value="compact" ${t.elementSize==='compact'?'selected':''}>Компактный</option>
-                    </select>
-                </label>
-                <label style="margin-left:20px;">Стиль кнопок:
-                    <select id="ultimate-btn-style">
-                        <option value="rounded" ${t.buttonStyle==='rounded'?'selected':''}>Скругленные</option>
-                        <option value="flat" ${t.buttonStyle==='flat'?'selected':''}>Плоские</option>
-                        <option value="outline" ${t.buttonStyle==='outline'?'selected':''}>Outline</option>
-                    </select>
-                </label>
-                <label style="margin-left:20px;">Стиль иконок:
-                    <select id="ultimate-icon-style">
-                        <option value="color" ${t.iconStyle==='color'?'selected':''}>Цветные</option>
-                        <option value="mono" ${t.iconStyle==='mono'?'selected':''}>Монохром</option>
-                        <option value="outline" ${t.iconStyle==='outline'?'selected':''}>Outline</option>
-                    </select>
-                </label>
-                <hr><div style="margin-top:10px;">Drag&drop для панели быстрого доступа и порядка модулей (базовая демо):</div>
-                <ul id="ultimate-modules-dnd" style="list-style:none;padding:0;display:flex;gap:10px;">${Object.keys(LampaUltimate.modules).map(m=>`<li draggable="true" data-mod="${m}" style="background:#333;padding:6px 14px;border-radius:8px;cursor:grab;">${LampaUltimate.modules[m].name||m}</li>`).join('')}</ul>`;
-                content.innerHTML = html;
-                // Селекты тем и стилей
-                let themeSel = content.querySelector('#ultimate-theme-select');
-                let sizeSel = content.querySelector('#ultimate-size-select');
-                let btnStyleSel = content.querySelector('#ultimate-btn-style');
-                let iconStyleSel = content.querySelector('#ultimate-icon-style');
-                if (themeSel) themeSel.onchange = function() { t.applyTheme(themeSel.value); };
-                if (sizeSel) sizeSel.onchange = function() { t.elementSize = sizeSel.value; LampaUltimate.settings.themes.elementSize = sizeSel.value; LampaUltimate.saveSettings(); };
-                if (btnStyleSel) btnStyleSel.onchange = function() { t.buttonStyle = btnStyleSel.value; LampaUltimate.settings.themes.buttonStyle = btnStyleSel.value; LampaUltimate.saveSettings(); };
-                if (iconStyleSel) iconStyleSel.onchange = function() { t.iconStyle = iconStyleSel.value; LampaUltimate.settings.themes.iconStyle = iconStyleSel.value; LampaUltimate.saveSettings(); };
-                // Drag&drop модулей (базовая реализация)
-                let dnd = content.querySelector('#ultimate-modules-dnd');
-                if (dnd) {
-                    let dragSrc = null;
-                    dnd.querySelectorAll('li').forEach(li => {
-                        li.ondragstart = function(e) { dragSrc = li; li.style.opacity = 0.5; };
-                        li.ondragend = function(e) { dragSrc = null; li.style.opacity = 1; };
-                        li.ondragover = function(e) { e.preventDefault(); };
-                        li.ondrop = function(e) {
-                            e.preventDefault();
-                            if (dragSrc && dragSrc !== li) {
-                                dnd.insertBefore(dragSrc, li.nextSibling);
-                                // Можно сохранить порядок в настройках
-                            }
-                        };
-                    });
-                }
-            }
+    // --- UI для вкладки 'Внешний вид' ---
+    LampaUltimate.renderAppearanceTab = function(content) {
+        let t = LampaUltimate.modules.themes;
+        let html = `<h3>Внешний вид</h3>
+        <label>Тема:
+            <select id="ultimate-theme-select">
+                ${Object.keys(t.themes).map(key => `<option value="${key}" ${t.current===key?'selected':''}>${t.themes[key].name}</option>`).join('')}
+            </select>
+        </label>
+        <label style="margin-left:20px;">Размер элементов:
+            <select id="ultimate-size-select">
+                <option value="normal" ${t.elementSize==='normal'?'selected':''}>Обычный</option>
+                <option value="large" ${t.elementSize==='large'?'selected':''}>Крупный</option>
+                <option value="compact" ${t.elementSize==='compact'?'selected':''}>Компактный</option>
+            </select>
+        </label>
+        <label style="margin-left:20px;">Стиль кнопок:
+            <select id="ultimate-btn-style">
+                <option value="rounded" ${t.buttonStyle==='rounded'?'selected':''}>Скругленные</option>
+                <option value="flat" ${t.buttonStyle==='flat'?'selected':''}>Плоские</option>
+                <option value="outline" ${t.buttonStyle==='outline'?'selected':''}>Outline</option>
+            </select>
+        </label>
+        <label style="margin-left:20px;">Стиль иконок:
+            <select id="ultimate-icon-style">
+                <option value="color" ${t.iconStyle==='color'?'selected':''}>Цветные</option>
+                <option value="mono" ${t.iconStyle==='mono'?'selected':''}>Монохром</option>
+                <option value="outline" ${t.iconStyle==='outline'?'selected':''}>Outline</option>
+            </select>
+        </label>
+        <hr><div style="margin-top:10px;">Drag&drop для панели быстрого доступа и порядка модулей:</div>
+        <ul id="ultimate-modules-dnd" style="list-style:none;padding:0;display:flex;gap:10px;">${Object.keys(LampaUltimate.modules).map(m=>`<li draggable="true" data-mod="${m}" style="background:#333;padding:6px 14px;border-radius:8px;cursor:grab;">${LampaUltimate.modules[m].name||m}</li>`).join('')}</ul>`;
+        content.innerHTML = html;
+        // Селекты тем и стилей
+        let themeSel = content.querySelector('#ultimate-theme-select');
+        let sizeSel = content.querySelector('#ultimate-size-select');
+        let btnStyleSel = content.querySelector('#ultimate-btn-style');
+        let iconStyleSel = content.querySelector('#ultimate-icon-style');
+        if (themeSel) themeSel.onchange = function() { t.applyTheme(themeSel.value); };
+        if (sizeSel) sizeSel.onchange = function() { t.elementSize = sizeSel.value; LampaUltimate.settings.themes.elementSize = sizeSel.value; LampaUltimate.saveSettings(); };
+        if (btnStyleSel) btnStyleSel.onchange = function() { t.buttonStyle = btnStyleSel.value; LampaUltimate.settings.themes.buttonStyle = btnStyleSel.value; LampaUltimate.saveSettings(); };
+        if (iconStyleSel) iconStyleSel.onchange = function() { t.iconStyle = iconStyleSel.value; LampaUltimate.settings.themes.iconStyle = iconStyleSel.value; LampaUltimate.saveSettings(); };
+        // Drag&drop модулей
+        let dnd = content.querySelector('#ultimate-modules-dnd');
+        if (dnd) {
+            let dragSrc = null;
+            dnd.querySelectorAll('li').forEach(li => {
+                li.ondragstart = function(e) { dragSrc = li; li.style.opacity = 0.5; };
+                li.ondragend = function(e) { dragSrc = null; li.style.opacity = 1; };
+                li.ondragover = function(e) { e.preventDefault(); };
+                li.ondrop = function(e) {
+                    e.preventDefault();
+                    if (dragSrc && dragSrc !== li) {
+                        dnd.insertBefore(dragSrc, li.nextSibling);
+                        // Можно сохранить порядок в настройках
+                    }
+                };
+            });
         }
     };
+
+    // --- Встраиваем вкладку 'Внешний вид' в меню ---
+    (function patchAppearanceTab() {
+        const origRenderMenu = LampaUltimate.renderMenu;
+        LampaUltimate.renderMenu = function() {
+            origRenderMenu.call(this);
+            // Переопределяем рендер вкладки 'Внешний вид'
+            let tabsBar = document.getElementById('lampa-ultimate-tabs');
+            let content = document.getElementById('lampa-ultimate-content');
+            if (!tabsBar || !content) return;
+            let origRenderTab = content.renderTab || function(tabId){};
+            content.renderTab = function(tabId) {
+                if (tabId === 'appearance') {
+                    LampaUltimate.renderAppearanceTab(content);
+                } else {
+                    origRenderTab(tabId);
+                }
+            };
+        };
+    })();
+
+    // --- Инициализация тем ---
+    setTimeout(() => {
+        if (LampaUltimate.modules.themes && LampaUltimate.modules.themes.init) LampaUltimate.modules.themes.init();
+    }, 1700);
 
     // --- Модуль "Эксперименты" ---
     LampaUltimate.modules.experiments = {
