@@ -243,6 +243,141 @@
         }
     };
 
+    // --- Модуль "Бейджи качества и серий" ---
+    LampaUltimate.modules.badges = Object.assign(LampaUltimate.modules.badges, {
+        style: 'color', // color | minimal | icon
+        show: 'both',   // quality | episodes | both | none
+        init() {
+            // Добавляем настройки во вкладки
+            LampaUltimate.settings.badges = LampaUltimate.settings.badges || {
+                style: 'color',
+                show: 'both'
+            };
+            this.style = LampaUltimate.settings.badges.style;
+            this.show = LampaUltimate.settings.badges.show;
+
+            // Патчим рендер карточек Lampa (универсально для всех источников)
+            const origRender = window.Lampa && Lampa.Card && Lampa.Card.render;
+            if (origRender && !Lampa.Card._ultimatePatched) {
+                Lampa.Card.render = function(cardData, ...args) {
+                    let el = origRender.call(this, cardData, ...args);
+                    setTimeout(() => {
+                        try {
+                            if (!el) return;
+                            // Удаляем старые бейджи
+                            el.querySelectorAll('.ultimate-badge').forEach(b => b.remove());
+                            // Получаем качество и серии
+                            let quality = cardData.quality || cardData.Quality || '';
+                            let episodes = '';
+                            if (cardData.number_of_episodes && cardData.number_of_seasons) {
+                                episodes = `${cardData.number_of_episodes}/${cardData.number_of_seasons}`;
+                            } else if (cardData.episodes) {
+                                episodes = cardData.episodes;
+                            }
+                            // Показываем бейджи по настройкам
+                            if (LampaUltimate.modules.badges.enabled && LampaUltimate.settings.badges.show !== 'none') {
+                                if ((LampaUltimate.settings.badges.show === 'quality' || LampaUltimate.settings.badges.show === 'both') && quality) {
+                                    let badge = document.createElement('div');
+                                    badge.className = 'ultimate-badge ultimate-badge-quality';
+                                    badge.style = badgeStyle(LampaUltimate.settings.badges.style, 'quality');
+                                    badge.textContent = quality;
+                                    el.appendChild(badge);
+                                }
+                                if ((LampaUltimate.settings.badges.show === 'episodes' || LampaUltimate.settings.badges.show === 'both') && episodes) {
+                                    let badge = document.createElement('div');
+                                    badge.className = 'ultimate-badge ultimate-badge-episodes';
+                                    badge.style = badgeStyle(LampaUltimate.settings.badges.style, 'episodes');
+                                    badge.textContent = episodes;
+                                    el.appendChild(badge);
+                                }
+                            }
+                        } catch(e) {}
+                    }, 0);
+                    return el;
+                };
+                Lampa.Card._ultimatePatched = true;
+            }
+            // Вспомогательная функция для стиля бейджа
+            function badgeStyle(style, type) {
+                if (style === 'color') {
+                    return `position:absolute;top:${type==='quality'?8:36}px;right:8px;background:linear-gradient(90deg,#00dbde,#fc00ff);color:#fff;padding:2px 8px;border-radius:8px;font-size:1em;font-weight:bold;z-index:10;`;
+                } else if (style === 'minimal') {
+                    return `position:absolute;top:${type==='quality'?8:36}px;right:8px;background:#222;color:#fff;padding:2px 8px;border-radius:8px;font-size:1em;z-index:10;`;
+                } else if (style === 'icon') {
+                    return `position:absolute;top:${type==='quality'?8:36}px;right:8px;background:#fff;color:#00dbde;padding:2px 8px;border-radius:8px;font-size:1em;z-index:10;display:flex;align-items:center;gap:4px;`;
+                }
+                return '';
+            }
+        }
+    });
+
+    // --- Добавляем настройки бейджей в меню ---
+    const origRenderTab = LampaUltimate.renderCustomMenu;
+    LampaUltimate.renderCustomMenu = function() {
+        origRenderTab.call(this);
+        // Добавляем настройки во вкладку "Модули"
+        let content = document.getElementById('lampa-ultimate-content');
+        let tabsBar = document.getElementById('lampa-ultimate-tabs');
+        if (!content || !tabsBar) return;
+        let modulesBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === 'modules');
+        if (modulesBtn) {
+            modulesBtn.onclick = function() {
+                // Перерисовываем стандартную вкладку
+                let html = '<h3>Модули</h3><ul style="list-style:none;padding:0;">';
+                Object.entries(LampaUltimate.modules).forEach(([key, mod]) => {
+                    html += `<li style="margin-bottom:10px;">
+                        <label style="display:flex;align-items:center;gap:10px;">
+                            <input type="checkbox" data-mod="${key}" ${mod.enabled ? 'checked' : ''} style="width:20px;height:20px;">
+                            <span style="font-size:1.1em;">${mod.name}</span>
+                        </label>`;
+                    if (key === 'badges') {
+                        html += `<div style="margin-left:30px;margin-top:5px;">
+                            <label>Стиль бейджей:
+                                <select id="badges-style">
+                                    <option value="color" ${LampaUltimate.settings.badges.style==='color'?'selected':''}>Цветные</option>
+                                    <option value="minimal" ${LampaUltimate.settings.badges.style==='minimal'?'selected':''}>Минимал</option>
+                                    <option value="icon" ${LampaUltimate.settings.badges.style==='icon'?'selected':''}>С иконками</option>
+                                </select>
+                            </label>
+                            <label style="margin-left:20px;">Показывать:
+                                <select id="badges-show">
+                                    <option value="both" ${LampaUltimate.settings.badges.show==='both'?'selected':''}>Качество и серии</option>
+                                    <option value="quality" ${LampaUltimate.settings.badges.show==='quality'?'selected':''}>Только качество</option>
+                                    <option value="episodes" ${LampaUltimate.settings.badges.show==='episodes'?'selected':''}>Только серии</option>
+                                    <option value="none" ${LampaUltimate.settings.badges.show==='none'?'selected':''}>Ничего</option>
+                                </select>
+                            </label>
+                        </div>`;
+                    }
+                    html += '</li>';
+                });
+                html += '</ul>';
+                content.innerHTML = html;
+                // Переключатели модулей
+                content.querySelectorAll('input[type=checkbox][data-mod]').forEach(chk => {
+                    chk.onchange = function() {
+                        let mod = chk.dataset.mod;
+                        LampaUltimate.modules[mod].enabled = chk.checked;
+                        LampaUltimate.saveSettings();
+                    };
+                });
+                // Настройки бейджей
+                let styleSel = content.querySelector('#badges-style');
+                let showSel = content.querySelector('#badges-show');
+                if (styleSel) styleSel.onchange = function() {
+                    LampaUltimate.settings.badges.style = styleSel.value;
+                    LampaUltimate.modules.badges.style = styleSel.value;
+                    LampaUltimate.saveSettings();
+                };
+                if (showSel) showSel.onchange = function() {
+                    LampaUltimate.settings.badges.show = showSel.value;
+                    LampaUltimate.modules.badges.show = showSel.value;
+                    LampaUltimate.saveSettings();
+                };
+            };
+        }
+    };
+
     // Пример заглушки модуля (реализовать каждый модуль отдельно)
     LampaUltimate.registerModule('badges', {
         enabled: true,
