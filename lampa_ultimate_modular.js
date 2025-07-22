@@ -960,10 +960,9 @@ Lampa Ultimate Modular Plugin
         }
     };
 
-    // --- Модуль "Аналитика и статистика" ---
+    // === Этап 5: Аналитика и статистика ===
     LampaUltimate.modules.analytics = {
         enabled: true,
-        name: 'Аналитика и статистика',
         stats: {
             totalWatched: 0,
             genres: {},
@@ -971,7 +970,7 @@ Lampa Ultimate Modular Plugin
             byCollection: {},
         },
         init() {
-            // Сбор статистики (примерно, можно доработать под вашу структуру)
+            // Сбор статистики
             let allCards = window.Lampa && Lampa.Data && Lampa.Data.cards ? Lampa.Data.cards : [];
             let watched = allCards.filter(card => isWatched(card));
             this.stats.totalWatched = watched.length;
@@ -988,7 +987,6 @@ Lampa Ultimate Modular Plugin
                 let ids = LampaUltimate.modules.collections.lists[listName];
                 this.stats.byCollection[listName] = ids.filter(id => watched.find(card => card.id===id)).length;
             });
-            // Можно добавить динамику по датам, любимых актеров и т.д.
             function isWatched(card) {
                 return card.watched === true || card.is_watched === true || card.progress === 1 || card.seen === true;
             }
@@ -1002,45 +1000,49 @@ Lampa Ultimate Modular Plugin
         }
     };
 
-    // --- Вкладка "Аналитика" в меню ---
-    const origRenderTabAnalytics = LampaUltimate.renderCustomMenu;
-    LampaUltimate.renderCustomMenu = function() {
-        origRenderTabAnalytics.call(this);
-        // Добавляем вкладку "Аналитика"
-        let tabsBar = document.getElementById('lampa-ultimate-tabs');
-        if (tabsBar && !Array.from(tabsBar.children).find(btn => btn.dataset.tab === 'analytics')) {
-            let btn = document.createElement('button');
-            btn.textContent = 'Аналитика';
-            btn.dataset.tab = 'analytics';
-            btn.style = 'background:none;border:none;color:#fff;font-size:1.1em;padding:10px 0 8px 0;cursor:pointer;';
-            btn.onclick = () => renderTab('analytics');
-            tabsBar.appendChild(btn);
-        }
-        // Переопределяем рендер вкладки
-        let content = document.getElementById('lampa-ultimate-content');
-        function renderTab(tabId) {
-            Array.from(tabsBar.children).forEach(btn => btn.style.borderBottom = 'none');
-            let activeBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === tabId);
-            if (activeBtn) activeBtn.style.borderBottom = '2px solid #00dbde';
-            if (tabId === 'analytics') {
-                LampaUltimate.modules.analytics.init();
-                let s = LampaUltimate.modules.analytics.stats;
-                let genres = Object.entries(s.genres).sort((a,b)=>b[1]-a[1]).map(([g,c])=>`${g}: ${c}`).join(', ');
-                let byCol = Object.entries(s.byCollection).map(([n,c])=>`${n}: ${c}`).join(', ');
-                let html = `<h3>Аналитика</h3>
-                <div>Всего просмотрено: <b>${s.totalWatched}</b></div>
-                <div>Любимые жанры: <b>${genres}</b></div>
-                <div>Время за просмотром: <b>${Math.round(s.timeSpent/60)} ч.</b></div>
-                <div>По коллекциям: <b>${byCol}</b></div>
-                <button id="ultimate-analytics-report">Текстовый отчет</button>`;
-                content.innerHTML = html;
-                let repBtn = content.querySelector('#ultimate-analytics-report');
-                if (repBtn) repBtn.onclick = function() {
-                    alert(LampaUltimate.modules.analytics.report());
-                };
-            }
-        }
+    // --- UI для вкладки 'Аналитика' ---
+    LampaUltimate.renderAnalyticsTab = function(content) {
+        LampaUltimate.modules.analytics.init();
+        let s = LampaUltimate.modules.analytics.stats;
+        let genres = Object.entries(s.genres).sort((a,b)=>b[1]-a[1]).map(([g,c])=>`${g}: ${c}`).join(', ');
+        let byCol = Object.entries(s.byCollection).map(([n,c])=>`${n}: ${c}`).join(', ');
+        let html = `<h3>Аналитика</h3>
+        <div>Всего просмотрено: <b>${s.totalWatched}</b></div>
+        <div>Любимые жанры: <b>${genres}</b></div>
+        <div>Время за просмотром: <b>${Math.round(s.timeSpent/60)} ч.</b></div>
+        <div>По коллекциям: <b>${byCol}</b></div>
+        <button id="ultimate-analytics-report">Текстовый отчет</button>`;
+        content.innerHTML = html;
+        let repBtn = content.querySelector('#ultimate-analytics-report');
+        if (repBtn) repBtn.onclick = function() {
+            alert(LampaUltimate.modules.analytics.report());
+        };
     };
+
+    // --- Встраиваем вкладку 'Аналитика' в меню ---
+    (function patchAnalyticsTab() {
+        const origRenderMenu = LampaUltimate.renderMenu;
+        LampaUltimate.renderMenu = function() {
+            origRenderMenu.call(this);
+            // Переопределяем рендер вкладки 'Аналитика'
+            let tabsBar = document.getElementById('lampa-ultimate-tabs');
+            let content = document.getElementById('lampa-ultimate-content');
+            if (!tabsBar || !content) return;
+            let origRenderTab = content.renderTab || function(tabId){};
+            content.renderTab = function(tabId) {
+                if (tabId === 'analytics') {
+                    LampaUltimate.renderAnalyticsTab(content);
+                } else {
+                    origRenderTab(tabId);
+                }
+            };
+        };
+    })();
+
+    // --- Инициализация аналитики ---
+    setTimeout(() => {
+        if (LampaUltimate.modules.analytics && LampaUltimate.modules.analytics.init) LampaUltimate.modules.analytics.init();
+    }, 1600);
 
     // --- Модуль "Профили и экспорт/импорт" ---
     LampaUltimate.modules.profiles = {
