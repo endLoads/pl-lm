@@ -1332,10 +1332,9 @@ Lampa Ultimate Modular Plugin
         if (LampaUltimate.modules.themes && LampaUltimate.modules.themes.init) LampaUltimate.modules.themes.init();
     }, 1700);
 
-    // --- Модуль "Эксперименты" ---
+    // === Этап 9: Эксперименты и профили ===
     LampaUltimate.modules.experiments = {
         enabled: true,
-        name: 'Эксперименты',
         options: {
             showFPS: false,
             altCardRender: false
@@ -1346,7 +1345,7 @@ Lampa Ultimate Modular Plugin
                 altCardRender: false
             };
             this.options = Object.assign({}, LampaUltimate.settings.experiments);
-            // Пример: показать счетчик FPS
+            // Счётчик FPS
             if (this.options.showFPS && !document.getElementById('ultimate-fps-counter')) {
                 let fpsDiv = document.createElement('div');
                 fpsDiv.id = 'ultimate-fps-counter';
@@ -1366,72 +1365,138 @@ Lampa Ultimate Modular Plugin
             } else if (!this.options.showFPS && document.getElementById('ultimate-fps-counter')) {
                 document.getElementById('ultimate-fps-counter').remove();
             }
-            // Пример: альтернативный рендер карточек (заглушка)
+            // Альтернативный рендер карточек (заглушка для расширения)
             if (this.options.altCardRender) {
                 // Можно реализовать альтернативный стиль карточек
             }
         }
     };
 
-    // --- Вкладка "Эксперименты" в меню ---
-    const origRenderTabExperiments = LampaUltimate.renderCustomMenu;
-    LampaUltimate.renderCustomMenu = function() {
-        origRenderTabExperiments.call(this);
-        // Переопределяем рендер вкладки "Эксперименты"
-        let tabsBar = document.getElementById('lampa-ultimate-tabs');
-        let content = document.getElementById('lampa-ultimate-content');
-        function renderTab(tabId) {
-            Array.from(tabsBar.children).forEach(btn => btn.style.borderBottom = 'none');
-            let activeBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === tabId);
-            if (activeBtn) activeBtn.style.borderBottom = '2px solid #00dbde';
-            if (tabId === 'experiments') {
-                let e = LampaUltimate.modules.experiments;
-                let html = `<h3>Экспериментальные функции</h3>
-                <label><input type="checkbox" id="exp-fps" ${e.options.showFPS?'checked':''}> Показать счетчик FPS</label><br>
-                <label><input type="checkbox" id="exp-altcard" ${e.options.altCardRender?'checked':''}> Альтернативный рендер карточек (демо)</label><br>
-                <div style="margin-top:10px;color:#aaa;">Включайте экспериментальные функции на свой страх и риск!</div>`;
-                content.innerHTML = html;
-                let fpsChk = content.querySelector('#exp-fps');
-                let altChk = content.querySelector('#exp-altcard');
-                if (fpsChk) fpsChk.onchange = function() {
-                    e.options.showFPS = fpsChk.checked;
-                    LampaUltimate.settings.experiments.showFPS = fpsChk.checked;
-                    LampaUltimate.saveSettings();
-                    e.init();
-                };
-                if (altChk) altChk.onchange = function() {
-                    e.options.altCardRender = altChk.checked;
-                    LampaUltimate.settings.experiments.altCardRender = altChk.checked;
-                    LampaUltimate.saveSettings();
-                    e.init();
-                };
-            }
-        }
+    // --- UI для вкладки 'Эксперименты' ---
+    LampaUltimate.renderExperimentsTab = function(content) {
+        let e = LampaUltimate.modules.experiments;
+        let html = `<h3>Экспериментальные функции</h3>
+        <label><input type="checkbox" id="exp-fps" ${e.options.showFPS?'checked':''}> Показать счетчик FPS</label><br>
+        <label><input type="checkbox" id="exp-altcard" ${e.options.altCardRender?'checked':''}> Альтернативный рендер карточек (демо)</label><br>
+        <div style="margin-top:10px;color:#aaa;">Включайте экспериментальные функции на свой страх и риск!</div>`;
+        content.innerHTML = html;
+        let fpsChk = content.querySelector('#exp-fps');
+        let altChk = content.querySelector('#exp-altcard');
+        if (fpsChk) fpsChk.onchange = function() {
+            e.options.showFPS = fpsChk.checked;
+            LampaUltimate.settings.experiments.showFPS = fpsChk.checked;
+            LampaUltimate.saveSettings();
+            e.init();
+        };
+        if (altChk) altChk.onchange = function() {
+            e.options.altCardRender = altChk.checked;
+            LampaUltimate.settings.experiments.altCardRender = altChk.checked;
+            LampaUltimate.saveSettings();
+            e.init();
+        };
     };
 
-    // Пример заглушки модуля (реализовать каждый модуль отдельно)
-    LampaUltimate.registerModule('badges', {
-        enabled: true,
-        name: 'Бейджи качества и серий',
-        init() {
-            // TODO: Реализовать рендер бейджей на карточках
-        }
-    });
-    LampaUltimate.registerModule('logos', {
-        enabled: true,
-        name: 'Оригинальные логотипы',
-        init() {
-            // TODO: Реализовать автоматическое получение и отображение логотипов
-        }
-    });
-    LampaUltimate.registerModule('vpn', {
-        enabled: false,
-        name: 'VPN Checker',
-        init() {
-            // TODO: Реализовать проверку VPN с мульти-API и визуализацией
-        }
-    });
-    // ... другие модули по аналогии
+    // --- UI для вкладки 'Профили' ---
+    LampaUltimate.renderProfilesTab = function(content) {
+        let self = LampaUltimate;
+        let html = `<h3>Профили</h3>
+        <div>Текущий профиль: <b>${self.activeProfile}</b></div>
+        <button id="lampa-ultimate-save-profile" style="margin:10px 0;">Сохранить текущий профиль</button>
+        <ul style="list-style:none;padding:0;">`;
+        Object.keys(self.profiles).forEach(name => {
+            html += `<li style="margin-bottom:8px;">
+                <button data-profile="${name}" class="ultimate-profile-load">Загрузить</button>
+                <button data-profile="${name}" class="ultimate-profile-del">Удалить</button>
+                <button data-profile="${name}" class="ultimate-profile-export">Экспорт</button>
+                <button data-profile="${name}" class="ultimate-profile-import">Импорт</button>
+                <span>${name}</span>
+            </li>`;
+        });
+        html += '</ul>';
+        html += `<button id="ultimate-profile-add">Создать профиль</button>`;
+        content.innerHTML = html;
+        // Сохранить профиль
+        content.querySelector('#lampa-ultimate-save-profile').onclick = function() {
+            let name = prompt('Введите имя профиля:');
+            if (name) {
+                self.saveProfile(name);
+                LampaUltimate.renderProfilesTab(content);
+            }
+        };
+        // Загрузить профиль
+        content.querySelectorAll('.ultimate-profile-load').forEach(btn => {
+            btn.onclick = function() {
+                let name = btn.dataset.profile;
+                if (confirm('Переключиться на профиль ' + name + '?')) {
+                    self.loadProfile(name);
+                    LampaUltimate.renderProfilesTab(content);
+                }
+            };
+        });
+        // Удалить профиль
+        content.querySelectorAll('.ultimate-profile-del').forEach(btn => {
+            btn.onclick = function() {
+                let name = btn.dataset.profile;
+                if (confirm('Удалить профиль ' + name + '?')) {
+                    self.deleteProfile(name);
+                    LampaUltimate.renderProfilesTab(content);
+                }
+            };
+        });
+        // Экспорт
+        content.querySelectorAll('.ultimate-profile-export').forEach(btn => {
+            btn.onclick = function() {
+                let name = btn.dataset.profile;
+                prompt('Данные для экспорта:', self.exportProfile(name));
+            };
+        });
+        // Импорт
+        content.querySelectorAll('.ultimate-profile-import').forEach(btn => {
+            btn.onclick = function() {
+                let name = btn.dataset.profile;
+                let data = prompt('Вставьте данные для импорта:');
+                if (data) {
+                    self.importProfile(name, data);
+                    LampaUltimate.renderProfilesTab(content);
+                }
+            };
+        });
+        // Создать профиль
+        let addBtn = content.querySelector('#ultimate-profile-add');
+        if (addBtn) addBtn.onclick = function() {
+            let name = prompt('Название нового профиля:');
+            if (name && !self.profiles[name]) {
+                self.saveProfile(name);
+                LampaUltimate.renderProfilesTab(content);
+            }
+        };
+    };
+
+    // --- Встраиваем вкладки 'Эксперименты' и 'Профили' в меню ---
+    (function patchExperimentsAndProfilesTabs() {
+        const origRenderMenu = LampaUltimate.renderMenu;
+        LampaUltimate.renderMenu = function() {
+            origRenderMenu.call(this);
+            let tabsBar = document.getElementById('lampa-ultimate-tabs');
+            let content = document.getElementById('lampa-ultimate-content');
+            if (!tabsBar || !content) return;
+            let origRenderTab = content.renderTab || function(tabId){};
+            content.renderTab = function(tabId) {
+                if (tabId === 'experiments') {
+                    LampaUltimate.renderExperimentsTab(content);
+                } else if (tabId === 'profiles') {
+                    LampaUltimate.renderProfilesTab(content);
+                } else {
+                    origRenderTab(tabId);
+                }
+            };
+        };
+    })();
+
+    // --- Инициализация экспериментов ---
+    setTimeout(() => {
+        if (LampaUltimate.modules.experiments && LampaUltimate.modules.experiments.init) LampaUltimate.modules.experiments.init();
+    }, 2000);
 
     // --- Настройки Telegram-бота ---
     LampaUltimate.settings.telegram = LampaUltimate.settings.telegram || {
