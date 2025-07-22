@@ -529,6 +529,73 @@
         }
     });
 
+    // --- Модуль "Скрытие просмотренных" и быстрые фильтры ---
+    LampaUltimate.modules.hideWatched = {
+        enabled: false,
+        onlyNew: false,
+        name: 'Скрытие просмотренных',
+        init() {
+            LampaUltimate.settings.hideWatched = LampaUltimate.settings.hideWatched || {
+                enabled: false,
+                onlyNew: false
+            };
+            this.enabled = LampaUltimate.settings.hideWatched.enabled;
+            this.onlyNew = LampaUltimate.settings.hideWatched.onlyNew;
+            // Патчим рендер списков
+            const origRenderList = window.Lampa && Lampa.List && Lampa.List.render;
+            if (origRenderList && !Lampa.List._ultimatePatched) {
+                Lampa.List.render = function(items, ...args) {
+                    let filtered = items;
+                    if (LampaUltimate.modules.hideWatched.enabled) {
+                        filtered = filtered.filter(card => !isWatched(card));
+                    }
+                    if (LampaUltimate.modules.hideWatched.onlyNew) {
+                        filtered = filtered.filter(card => isNew(card));
+                    }
+                    return origRenderList.call(this, filtered, ...args);
+                };
+                Lampa.List._ultimatePatched = true;
+            }
+            // Быстрый фильтр на главном экране
+            setTimeout(() => {
+                if (!document.getElementById('ultimate-filter-btn')) {
+                    let btn = document.createElement('button');
+                    btn.id = 'ultimate-filter-btn';
+                    btn.textContent = this.onlyNew ? 'Показать все' : 'Только новые';
+                    btn.style = 'position:fixed;top:24px;right:24px;z-index:999999;background:#00dbde;color:#fff;padding:10px 18px;border-radius:12px;font-size:1.1em;box-shadow:0 2px 12px #0008;cursor:pointer;user-select:none;';
+                    btn.onclick = () => {
+                        LampaUltimate.modules.hideWatched.onlyNew = !LampaUltimate.modules.hideWatched.onlyNew;
+                        LampaUltimate.settings.hideWatched.onlyNew = LampaUltimate.modules.hideWatched.onlyNew;
+                        btn.textContent = LampaUltimate.modules.hideWatched.onlyNew ? 'Показать все' : 'Только новые';
+                        LampaUltimate.saveSettings();
+                        // Перерисовать списки
+                        if (window.Lampa && Lampa.List && Lampa.List.render) {
+                            // Триггерим обновление (можно оптимизировать)
+                            let ev = new Event('ultimate-filter-update');
+                            document.dispatchEvent(ev);
+                        }
+                    };
+                    document.body.appendChild(btn);
+                }
+            }, 1000);
+            // Вспомогательные функции
+            function isWatched(card) {
+                // Универсальная проверка (можно доработать под вашу структуру)
+                return card.watched === true || card.is_watched === true || card.progress === 1 || card.seen === true;
+            }
+            function isNew(card) {
+                // Новое — если не просмотрено и дата релиза не старше 30 дней
+                if (isWatched(card)) return false;
+                if (card.release_date) {
+                    let d = new Date(card.release_date);
+                    let now = new Date();
+                    return (now - d) < 30*24*60*60*1000;
+                }
+                return true;
+            }
+        }
+    };
+
     // --- Добавляем настройки бейджей в меню ---
     const origRenderTab = LampaUltimate.renderCustomMenu;
     LampaUltimate.renderCustomMenu = function() {
@@ -594,6 +661,12 @@
                             </label>
                         </div>`;
                     }
+                    if (key === 'hideWatched') {
+                        html += `<div style="margin-left:30px;margin-top:5px;">
+                            <label><input type="checkbox" id="hide-watched-enabled" ${LampaUltimate.settings.hideWatched.enabled?'checked':''}> Скрывать просмотренные</label>
+                            <label style="margin-left:20px;"><input type="checkbox" id="hide-watched-onlynew" ${LampaUltimate.settings.hideWatched.onlyNew?'checked':''}> Только новые</label>
+                        </div>`;
+                    }
                     html += '</li>';
                 });
                 html += '</ul>';
@@ -639,6 +712,24 @@
                     LampaUltimate.modules.vpn.mode = vpnModeSel.value;
                     LampaUltimate.saveSettings();
                     LampaUltimate.modules.vpn.checkAndRender(true);
+                };
+                // Настройки скрытия просмотренных
+                let hideWatchedChk = content.querySelector('#hide-watched-enabled');
+                let onlyNewChk = content.querySelector('#hide-watched-onlynew');
+                if (hideWatchedChk) hideWatchedChk.onchange = function() {
+                    LampaUltimate.settings.hideWatched.enabled = hideWatchedChk.checked;
+                    LampaUltimate.modules.hideWatched.enabled = hideWatchedChk.checked;
+                    LampaUltimate.saveSettings();
+                    // Триггерим обновление списков
+                    let ev = new Event('ultimate-filter-update');
+                    document.dispatchEvent(ev);
+                };
+                if (onlyNewChk) onlyNewChk.onchange = function() {
+                    LampaUltimate.settings.hideWatched.onlyNew = onlyNewChk.checked;
+                    LampaUltimate.modules.hideWatched.onlyNew = onlyNewChk.checked;
+                    LampaUltimate.saveSettings();
+                    let ev = new Event('ultimate-filter-update');
+                    document.dispatchEvent(ev);
                 };
             };
         }
