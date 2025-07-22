@@ -1296,6 +1296,83 @@
         }
     };
 
+    // --- Модуль "Эксперименты" ---
+    LampaUltimate.modules.experiments = {
+        enabled: true,
+        name: 'Эксперименты',
+        options: {
+            showFPS: false,
+            altCardRender: false
+        },
+        init() {
+            LampaUltimate.settings.experiments = LampaUltimate.settings.experiments || {
+                showFPS: false,
+                altCardRender: false
+            };
+            this.options = Object.assign({}, LampaUltimate.settings.experiments);
+            // Пример: показать счетчик FPS
+            if (this.options.showFPS && !document.getElementById('ultimate-fps-counter')) {
+                let fpsDiv = document.createElement('div');
+                fpsDiv.id = 'ultimate-fps-counter';
+                fpsDiv.style = 'position:fixed;bottom:8px;left:8px;z-index:999999;background:#222;color:#fff;padding:4px 12px;border-radius:8px;font-size:1em;opacity:0.8;';
+                document.body.appendChild(fpsDiv);
+                let last = performance.now(), frames = 0, fps = 0;
+                function loop() {
+                    frames++;
+                    let now = performance.now();
+                    if (now - last > 1000) {
+                        fps = frames; frames = 0; last = now;
+                        fpsDiv.textContent = 'FPS: ' + fps;
+                    }
+                    if (document.getElementById('ultimate-fps-counter')) requestAnimationFrame(loop);
+                }
+                loop();
+            } else if (!this.options.showFPS && document.getElementById('ultimate-fps-counter')) {
+                document.getElementById('ultimate-fps-counter').remove();
+            }
+            // Пример: альтернативный рендер карточек (заглушка)
+            if (this.options.altCardRender) {
+                // Можно реализовать альтернативный стиль карточек
+            }
+        }
+    };
+
+    // --- Вкладка "Эксперименты" в меню ---
+    const origRenderTabExperiments = LampaUltimate.renderCustomMenu;
+    LampaUltimate.renderCustomMenu = function() {
+        origRenderTabExperiments.call(this);
+        // Переопределяем рендер вкладки "Эксперименты"
+        let tabsBar = document.getElementById('lampa-ultimate-tabs');
+        let content = document.getElementById('lampa-ultimate-content');
+        function renderTab(tabId) {
+            Array.from(tabsBar.children).forEach(btn => btn.style.borderBottom = 'none');
+            let activeBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === tabId);
+            if (activeBtn) activeBtn.style.borderBottom = '2px solid #00dbde';
+            if (tabId === 'experiments') {
+                let e = LampaUltimate.modules.experiments;
+                let html = `<h3>Экспериментальные функции</h3>
+                <label><input type="checkbox" id="exp-fps" ${e.options.showFPS?'checked':''}> Показать счетчик FPS</label><br>
+                <label><input type="checkbox" id="exp-altcard" ${e.options.altCardRender?'checked':''}> Альтернативный рендер карточек (демо)</label><br>
+                <div style="margin-top:10px;color:#aaa;">Включайте экспериментальные функции на свой страх и риск!</div>`;
+                content.innerHTML = html;
+                let fpsChk = content.querySelector('#exp-fps');
+                let altChk = content.querySelector('#exp-altcard');
+                if (fpsChk) fpsChk.onchange = function() {
+                    e.options.showFPS = fpsChk.checked;
+                    LampaUltimate.settings.experiments.showFPS = fpsChk.checked;
+                    LampaUltimate.saveSettings();
+                    e.init();
+                };
+                if (altChk) altChk.onchange = function() {
+                    e.options.altCardRender = altChk.checked;
+                    LampaUltimate.settings.experiments.altCardRender = altChk.checked;
+                    LampaUltimate.saveSettings();
+                    e.init();
+                };
+            }
+        }
+    };
+
     // Пример заглушки модуля (реализовать каждый модуль отдельно)
     LampaUltimate.registerModule('badges', {
         enabled: true,
