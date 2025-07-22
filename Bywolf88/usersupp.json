@@ -1,0 +1,36 @@
+{
+    "supporters": [
+        {
+            "name": "Виталий Вадимович",
+            "contribution": "Фин. подержка, логин TG vito",
+            "date": " "
+        },
+        {
+            "name": "@vito",
+            "contribution": "Снова наш vito поддержал меня финансово, за что большое спасибо ему",
+            "date": " "
+        },
+        {
+            "name": "Денис Алексеевич",
+            "contribution": "Крупное пожертвование. ОГРОМНОЕ СПАСИБО!",
+            "date": " "
+        },
+        {
+            "name": "Алексей Георгиевич",
+            "contribution": "Фин. подержка",
+           "date": " "
+        }
+    ],
+    "contributors": [
+        {
+            "name": "TG: @fovway",
+            "contribution": "Идея цветных рейтингов",
+            "date": " "
+        },
+        {
+            "name": "TG: @modss_channel",
+            "contribution": "За идеи из плагина Modss",
+            "date": " "
+        }
+    ]
+}
