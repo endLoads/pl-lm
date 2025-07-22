@@ -374,19 +374,6 @@
                     style.id = 'ultimate-modular-styles';
                     style.textContent = css;
                     document.head.appendChild(style);
-                    
-                    // ... ваш дополнительный код ...
-                }
-                destroy: function() {
-                    // Очистка при деактивации плагина
-                    console.log('[Ultimate Modular] Plugin destroyed');
-                    
-                    // Удаляем добавленные элементы
-                    document.querySelectorAll('[data-ultimate-modular]').forEach(el => el.remove());
-                    
-                    // Удаляем стили
-                    const styles = document.getElementById('ultimate-modular-styles');
-                    if (styles) styles.remove();
                 }
             });
         } else {
