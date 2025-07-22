@@ -625,15 +625,13 @@ Lampa Ultimate Modular Plugin
             country: '',
             year: '',
             source: '',
-            watched: '', // all | watched | unwatched
+            watched: '', // all | watched | unwatched | new
         },
-        sort: 'date', // date | popularity | alpha | custom
+        sort: 'date', // date | popularity | alpha
         search: '',
         init() {
             LampaUltimate.settings.filters = LampaUltimate.settings.filters || {
-                filters: {
-                    quality: '', genre: '', country: '', year: '', source: '', watched: ''
-                },
+                filters: { quality: '', genre: '', country: '', year: '', source: '', watched: '' },
                 sort: 'date',
                 search: ''
             };
@@ -645,7 +643,6 @@ Lampa Ultimate Modular Plugin
             if (origRenderList && !Lampa.List._ultimateFilterPatched) {
                 Lampa.List.render = function(items, ...args) {
                     let filtered = items;
-                    // Фильтрация
                     let f = LampaUltimate.modules.filters.filters;
                     if (f.quality) filtered = filtered.filter(card => (card.quality||'').toLowerCase().includes(f.quality));
                     if (f.genre) filtered = filtered.filter(card => (card.genre_ids||[]).includes(f.genre) || (card.genres||[]).includes(f.genre));
@@ -654,7 +651,7 @@ Lampa Ultimate Modular Plugin
                     if (f.source) filtered = filtered.filter(card => (card.source||'').toLowerCase().includes(f.source));
                     if (f.watched === 'watched') filtered = filtered.filter(card => isWatched(card));
                     if (f.watched === 'unwatched') filtered = filtered.filter(card => !isWatched(card));
-                    // Поиск
+                    if (f.watched === 'new') filtered = filtered.filter(card => isNew(card));
                     let s = (LampaUltimate.modules.filters.search||'').toLowerCase();
                     if (s) filtered = filtered.filter(card => {
                         return (card.title||'').toLowerCase().includes(s) ||
@@ -663,12 +660,10 @@ Lampa Ultimate Modular Plugin
                             (card.actors||'').toLowerCase().includes(s) ||
                             (card.genres||[]).join(',').toLowerCase().includes(s);
                     });
-                    // Сортировка
                     let sort = LampaUltimate.modules.filters.sort;
                     if (sort === 'date') filtered = filtered.sort((a,b) => (b.release_date||'').localeCompare(a.release_date||''));
                     if (sort === 'popularity') filtered = filtered.sort((a,b) => (b.popularity||0)-(a.popularity||0));
                     if (sort === 'alpha') filtered = filtered.sort((a,b) => (a.title||'').localeCompare(b.title||''));
-                    // custom — не реализовано (можно добавить drag&drop)
                     return origRenderList.call(this, filtered, ...args);
                 };
                 Lampa.List._ultimateFilterPatched = true;
@@ -718,9 +713,17 @@ Lampa Ultimate Modular Plugin
                     };
                 }
             }, 1000);
-            // Вспомогательная функция
             function isWatched(card) {
                 return card.watched === true || card.is_watched === true || card.progress === 1 || card.seen === true;
+            }
+            function isNew(card) {
+                if (isWatched(card)) return false;
+                if (card.release_date) {
+                    let d = new Date(card.release_date);
+                    let now = new Date();
+                    return (now - d) < 30*24*60*60*1000;
+                }
+                return true;
             }
         }
     };
