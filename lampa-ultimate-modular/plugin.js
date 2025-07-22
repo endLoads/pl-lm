@@ -376,7 +376,7 @@
                     document.head.appendChild(style);
                     
                     // ... ваш дополнительный код ...
-                },
+                }
                 destroy: function() {
                     // Очистка при деактивации плагина
                     console.log('[Ultimate Modular] Plugin destroyed');
