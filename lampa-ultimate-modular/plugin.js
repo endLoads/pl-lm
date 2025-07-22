@@ -289,29 +289,85 @@
     });
 
 })(window.Plugin = window.Plugin || {});
- // Пример: добавляем кнопку в интерфейс
+ // 1. Добавляем кнопку в главное меню
                     Lampa.Listener.follow('app', (e) => {
                         if (e.type === 'ready') {
-                            const button = document.createElement('div');
-                            button.innerHTML = `
-                                <div class="selector __margined __compact">
-                                    <div class="selector__title">Ultimate Modular</div>
+                            // Создаем кнопку плагина
+                            const pluginButton = document.createElement('div');
+                            pluginButton.classList.add('selector', '__margined', '__compact');
+                            pluginButton.innerHTML = `
+                                <div class="selector__icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                                        <path fill="currentColor" d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7Z"/>
+                                    </svg>
                                 </div>
+                                <div class="selector__title">Ultimate Modular</div>
                             `;
-                            button.style.margin = '15px';
-                            button.style.cursor = 'pointer';
-                            button.addEventListener('click', () => {
-                                alert('Ultimate Modular Plugin is working!');
+                            pluginButton.style.margin = '15px';
+                            pluginButton.style.cursor = 'pointer';
+                            
+                            // Обработчик клика
+                            pluginButton.addEventListener('click', () => {
+                                // 2. Показываем кастомное модальное окно
+                                Lampa.Modal.open({
+                                    title: 'Ultimate Modular',
+                                    html: `
+                                        <div style="padding:20px;text-align:center">
+                                            <h3>Плагин успешно активирован!</h3>
+                                            <p>Версия: 1.0.0</p>
+                                            <div style="margin-top:30px">
+                                                <button class="button button--light" style="padding:10px 25px" data-close>OK</button>
+                                            </div>
+                                        </div>
+                                    `,
+                                    width: 500,
+                                    onBack: true
+                                });
                             });
                             
+                            // 3. Добавляем кнопку в интерфейс
                             const header = document.querySelector('.head__content');
-                            if (header) header.appendChild(button);
+                            if (header) {
+                                // Проверяем, не добавлена ли кнопка ранее
+                                if (!document.querySelector('.selector[data-ultimate-modular]')) {
+                                    pluginButton.setAttribute('data-ultimate-modular', 'true');
+                                    header.appendChild(pluginButton);
+                                }
+                            }
                         }
                     });
+                    
+                    // 4. Добавляем кастомные стили
+                    const css = `
+                        [data-ultimate-modular] {
+                            transition: transform 0.2s;
+                        }
+                        [data-ultimate-modular]:hover {
+                            transform: scale(1.05);
+                        }
+                        [data-ultimate-modular] .selector__icon {
+                            background: linear-gradient(45deg, #6a11cb, #2575fc);
+                        }
+                    `;
+                    const style = document.createElement('style');
+                    style.id = 'ultimate-modular-styles';
+                    style.textContent = css;
+                    document.head.appendChild(style);
+                    
+                    // 5. Функционал можно добавлять здесь
+                    // ... ваш дополнительный код ...
+                    
                 },
                 destroy: function() {
                     // Очистка при деактивации плагина
                     console.log('[Ultimate Modular] Plugin destroyed');
+                    
+                    // Удаляем добавленные элементы
+                    document.querySelectorAll('[data-ultimate-modular]').forEach(el => el.remove());
+                    
+                    // Удаляем стили
+                    const styles = document.getElementById('ultimate-modular-styles');
+                    if (styles) styles.remove();
                 }
             });
         } else {
