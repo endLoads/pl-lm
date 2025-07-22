@@ -1,12 +1,14 @@
-(function(Plugin) {
-    // Регистрация плагина
-    Plugin.register('ultimate_modular', {
-        title: 'Lampa Ultimate Modular',
-        version: '2.1',
-        author: 'bywolf88',
-        icon: 'https://[your-username].github.io/lampa-ultimate-modular/icon.png',
-        description: 'Расширенная кастомизация интерфейса и функционала'
-    });
+(() => {
+    // Ожидаем полной загрузки API плагинов LAMPA
+    const initPlugin = () => {
+        // Проверяем доступность API
+        if (window.Plugin && typeof Plugin.register === 'function') {
+            // Регистрируем плагин
+            Plugin.register('ultimate_modular', {
+                version: '1.0.0',
+                icon: 'icon.png',
+                init: function() {
+                    console.log('[Ultimate Modular] Plugin initialized!');
 
     // Конфигурация плагина
     const LUM = {
@@ -287,3 +289,41 @@
     });
 
 })(window.Plugin = window.Plugin || {});
+ // Пример: добавляем кнопку в интерфейс
+                    Lampa.Listener.follow('app', (e) => {
+                        if (e.type === 'ready') {
+                            const button = document.createElement('div');
+                            button.innerHTML = `
+                                <div class="selector __margined __compact">
+                                    <div class="selector__title">Ultimate Modular</div>
+                                </div>
+                            `;
+                            button.style.margin = '15px';
+                            button.style.cursor = 'pointer';
+                            button.addEventListener('click', () => {
+                                alert('Ultimate Modular Plugin is working!');
+                            });
+                            
+                            const header = document.querySelector('.head__content');
+                            if (header) header.appendChild(button);
+                        }
+                    });
+                },
+                destroy: function() {
+                    // Очистка при деактивации плагина
+                    console.log('[Ultimate Modular] Plugin destroyed');
+                }
+            });
+        } else {
+            // Повторяем проверку через 100мс если API не готово
+            setTimeout(initPlugin, 100);
+        }
+    };
+
+    // Старт инициализации
+    if (document.readyState === 'complete') {
+        initPlugin();
+    } else {
+        window.addEventListener('load', initPlugin);
+    }
+})();
