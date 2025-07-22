@@ -1451,13 +1451,12 @@ Lampa Ultimate Modular Plugin
         // myIcon: 'data:image/svg+xml;utf8,<svg .../svg>'
     };
 
-    // --- Модуль "Рекомендации" ---
+    // === Этап 7: Рекомендации ===
     LampaUltimate.modules.recommendations = {
         enabled: true,
-        name: 'Рекомендации',
         lastRandom: null,
         getPersonalized(allCards) {
-            // Пример: топ-10 жанров пользователя
+            // Топ-1 жанр пользователя
             let genres = {};
             let watched = allCards.filter(card => card.watched || card.is_watched || card.progress === 1);
             watched.forEach(card => (card.genres||[]).forEach(g => genres[g] = (genres[g]||0)+1));
@@ -1465,7 +1464,6 @@ Lampa Ultimate Modular Plugin
             return allCards.filter(card => (card.genres||[]).includes(topGenre) && !watched.includes(card)).slice(0,10);
         },
         getSimilar(card, allCards) {
-            // Пример: похожие по жанру
             return allCards.filter(c => c.id!==card.id && (c.genres||[]).some(g => (card.genres||[]).includes(g))).slice(0,10);
         },
         getRandom(allCards) {
@@ -1474,6 +1472,48 @@ Lampa Ultimate Modular Plugin
             return this.lastRandom;
         }
     };
+
+    // --- UI для вкладки 'Рекомендации' ---
+    LampaUltimate.renderRecommendationsTab = function(content) {
+        let allCards = window.Lampa && Lampa.Data && Lampa.Data.cards ? Lampa.Data.cards : [];
+        let rec = LampaUltimate.modules.recommendations;
+        let pers = rec.getPersonalized(allCards);
+        let html = `<h3>Персональные рекомендации</h3><ul style="list-style:none;padding:0;">`;
+        pers.forEach(card => { html += `<li>${card.title||card.name||card.original_title}</li>`; });
+        html += '</ul>';
+        html += `<button id="ultimate-random-btn">Случайный фильм</button>`;
+        content.innerHTML = html;
+        let randBtn = content.querySelector('#ultimate-random-btn');
+        if (randBtn) randBtn.onclick = function() {
+            let rnd = rec.getRandom(allCards);
+            alert('Случайный фильм: ' + (rnd?.title||rnd?.name||rnd?.original_title||'нет'));
+        };
+    };
+
+    // --- Встраиваем вкладку 'Рекомендации' в меню ---
+    (function patchRecommendationsTab() {
+        const origRenderMenu = LampaUltimate.renderMenu;
+        LampaUltimate.renderMenu = function() {
+            origRenderMenu.call(this);
+            // Переопределяем рендер вкладки 'Рекомендации'
+            let tabsBar = document.getElementById('lampa-ultimate-tabs');
+            let content = document.getElementById('lampa-ultimate-content');
+            if (!tabsBar || !content) return;
+            let origRenderTab = content.renderTab || function(tabId){};
+            content.renderTab = function(tabId) {
+                if (tabId === 'recommendations') {
+                    LampaUltimate.renderRecommendationsTab(content);
+                } else {
+                    origRenderTab(tabId);
+                }
+            };
+        };
+    })();
+
+    // --- Инициализация рекомендаций ---
+    setTimeout(() => {
+        if (LampaUltimate.modules.recommendations) {/* нет init, только методы */}
+    }, 1800);
 
     // --- Модуль "Уведомления" ---
     LampaUltimate.modules.notifications = {
