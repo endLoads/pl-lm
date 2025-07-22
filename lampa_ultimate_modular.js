@@ -1762,4 +1762,187 @@ Lampa Ultimate Modular Plugin
 
     // Экспорт для отладки
     window.LampaUltimate = LampaUltimate;
+
+    // === Новое меню настроек в стиле Bywolf88 (interface_mod_new.js) ===
+    LampaUltimate.renderModulesTab = function(content) {
+        let html = `<h3>Настройки модулей</h3><div style="display:flex;flex-direction:column;gap:24px;">`;
+        // Бейджи
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;"><input type="checkbox" id="mod-badges-enabled" ${LampaUltimate.modules.badges.enabled?'checked':''}> Бейджи качества и серий</label><br>
+            <span style="color:#aaa;">Показывать качество (HD, 4K и т.д.) и/или количество серий на постере для всех источников.</span><br>
+            <label>Стиль: <select id="mod-badges-style">
+                <option value="color" ${LampaUltimate.modules.badges.style==='color'?'selected':''}>Цветные</option>
+                <option value="minimal" ${LampaUltimate.modules.badges.style==='minimal'?'selected':''}>Минимал</option>
+                <option value="icon" ${LampaUltimate.modules.badges.style==='icon'?'selected':''}>Иконки</option>
+            </select></label>
+            <label style="margin-left:20px;">Показывать: <select id="mod-badges-show">
+                <option value="both" ${LampaUltimate.modules.badges.show==='both'?'selected':''}>Всё</option>
+                <option value="quality" ${LampaUltimate.modules.badges.show==='quality'?'selected':''}>Только качество</option>
+                <option value="episodes" ${LampaUltimate.modules.badges.show==='episodes'?'selected':''}>Только серии</option>
+                <option value="none" ${LampaUltimate.modules.badges.show==='none'?'selected':''}>Нет</option>
+            </select></label>
+        </div>`;
+        // Логотипы
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;"><input type="checkbox" id="mod-logos-enabled" ${LampaUltimate.modules.logos.enabled?'checked':''}> Оригинальные логотипы</label><br>
+            <span style="color:#aaa;">Показывать оригинальные логотипы из TMDB/Kinopoisk/IMDB на карточках.</span><br>
+            <label>Стиль: <select id="mod-logos-style">
+                <option value="color" ${LampaUltimate.modules.logos.style==='color'?'selected':''}>Цвет</option>
+                <option value="mono" ${LampaUltimate.modules.logos.style==='mono'?'selected':''}>Моно</option>
+                <option value="outline" ${LampaUltimate.modules.logos.style==='outline'?'selected':''}>Outline</option>
+            </select></label>
+            <label style="margin-left:20px;">Fallback: <select id="mod-logos-fallback">
+                <option value="poster" ${LampaUltimate.modules.logos.fallback==='poster'?'selected':''}>Постер</option>
+                <option value="title" ${LampaUltimate.modules.logos.fallback==='title'?'selected':''}>Название</option>
+            </select></label>
+        </div>`;
+        // Быстрые действия
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;"><input type="checkbox" id="mod-quick-enabled" ${LampaUltimate.modules.quickActions.enabled?'checked':''}> Быстрые действия на карточках</label><br>
+            <span style="color:#aaa;">Лайк, избранное, коллекции, скрыть, поделиться, скачать постер — всё настраивается.</span><br>
+            <label>Действия: <input id="mod-quick-actions" type="text" value="${LampaUltimate.modules.quickActions.actions.join(',')}"></label>
+        </div>`;
+        // Фильтры
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;"><input type="checkbox" id="mod-filters-enabled" ${LampaUltimate.modules.filters.enabled?'checked':''}> Фильтры и быстрый поиск</label><br>
+            <span style="color:#aaa;">Расширенные фильтры, сортировка, быстрый поиск по названию, актёру, жанру, сервису.</span>
+        </div>`;
+        // Коллекции
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;"><input type="checkbox" id="mod-collections-enabled" ${LampaUltimate.modules.collections.enabled?'checked':''}> Коллекции и избранное</label><br>
+            <span style="color:#aaa;">Создание, редактирование, быстрые действия, экспорт/импорт, шаринг.</span>
+        </div>`;
+        // VPN
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;"><input type="checkbox" id="mod-vpn-enabled" ${LampaUltimate.modules.vpn.enabled?'checked':''}> VPN Checker</label><br>
+            <span style="color:#aaa;">Проверка VPN/Proxy/TOR, индикатор, подробный/краткий режим, мульти-API.</span><br>
+            <label>Режим: <select id="mod-vpn-mode">
+                <option value="detailed" ${LampaUltimate.modules.vpn.mode==='detailed'?'selected':''}>Подробный</option>
+                <option value="short" ${LampaUltimate.modules.vpn.mode==='short'?'selected':''}>Краткий</option>
+            </select></label>
+        </div>`;
+        // Аналитика
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;">Аналитика и статистика</label><br>
+            <span style="color:#aaa;">Статистика просмотров, любимые жанры, время, отчёты.</span>
+        </div>`;
+        // Темы
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;">Темы и кастомизация</label><br>
+            <span style="color:#aaa;">Смена темы, размера, стиля кнопок/иконок, drag&drop панели быстрого доступа.</span>
+        </div>`;
+        // Рекомендации
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;">Рекомендации</label><br>
+            <span style="color:#aaa;">Персональные, похожие, случайные.</span>
+        </div>`;
+        // Уведомления
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;">Уведомления и Telegram</label><br>
+            <span style="color:#aaa;">Напоминания, push, интеграция с Telegram, поддержка, новости.</span>
+        </div>`;
+        // Эксперименты
+        html += `<div style="background:#23233a;padding:16px 20px;border-radius:12px;">
+            <label style="font-size:1.2em;font-weight:bold;">Эксперименты</label><br>
+            <span style="color:#aaa;">Включение новых функций, тестовые опции.</span>
+        </div>`;
+        html += '</div>';
+        content.innerHTML = html;
+        // --- Обработчики ---
+        // Бейджи
+        let badgesChk = content.querySelector('#mod-badges-enabled');
+        let badgesStyle = content.querySelector('#mod-badges-style');
+        let badgesShow = content.querySelector('#mod-badges-show');
+        if (badgesChk) badgesChk.onchange = function() {
+            LampaUltimate.modules.badges.enabled = badgesChk.checked;
+            LampaUltimate.settings.badges.enabled = badgesChk.checked;
+            LampaUltimate.saveSettings();
+        };
+        if (badgesStyle) badgesStyle.onchange = function() {
+            LampaUltimate.modules.badges.style = badgesStyle.value;
+            LampaUltimate.settings.badges.style = badgesStyle.value;
+            LampaUltimate.saveSettings();
+        };
+        if (badgesShow) badgesShow.onchange = function() {
+            LampaUltimate.modules.badges.show = badgesShow.value;
+            LampaUltimate.settings.badges.show = badgesShow.value;
+            LampaUltimate.saveSettings();
+        };
+        // Логотипы
+        let logosChk = content.querySelector('#mod-logos-enabled');
+        let logosStyle = content.querySelector('#mod-logos-style');
+        let logosFallback = content.querySelector('#mod-logos-fallback');
+        if (logosChk) logosChk.onchange = function() {
+            LampaUltimate.modules.logos.enabled = logosChk.checked;
+            LampaUltimate.settings.logos.enabled = logosChk.checked;
+            LampaUltimate.saveSettings();
+        };
+        if (logosStyle) logosStyle.onchange = function() {
+            LampaUltimate.modules.logos.style = logosStyle.value;
+            LampaUltimate.settings.logos.style = logosStyle.value;
+            LampaUltimate.saveSettings();
+        };
+        if (logosFallback) logosFallback.onchange = function() {
+            LampaUltimate.modules.logos.fallback = logosFallback.value;
+            LampaUltimate.settings.logos.fallback = logosFallback.value;
+            LampaUltimate.saveSettings();
+        };
+        // Быстрые действия
+        let quickChk = content.querySelector('#mod-quick-enabled');
+        let quickActions = content.querySelector('#mod-quick-actions');
+        if (quickChk) quickChk.onchange = function() {
+            LampaUltimate.modules.quickActions.enabled = quickChk.checked;
+            LampaUltimate.saveSettings();
+        };
+        if (quickActions) quickActions.onchange = function() {
+            LampaUltimate.modules.quickActions.actions = quickActions.value.split(',').map(s=>s.trim());
+            LampaUltimate.saveSettings();
+        };
+        // Фильтры
+        let filtersChk = content.querySelector('#mod-filters-enabled');
+        if (filtersChk) filtersChk.onchange = function() {
+            LampaUltimate.modules.filters.enabled = filtersChk.checked;
+            LampaUltimate.saveSettings();
+        };
+        // Коллекции
+        let collectionsChk = content.querySelector('#mod-collections-enabled');
+        if (collectionsChk) collectionsChk.onchange = function() {
+            LampaUltimate.modules.collections.enabled = collectionsChk.checked;
+            LampaUltimate.saveSettings();
+        };
+        // VPN
+        let vpnChk = content.querySelector('#mod-vpn-enabled');
+        let vpnMode = content.querySelector('#mod-vpn-mode');
+        if (vpnChk) vpnChk.onchange = function() {
+            LampaUltimate.modules.vpn.enabled = vpnChk.checked;
+            LampaUltimate.settings.vpn.enabled = vpnChk.checked;
+            LampaUltimate.saveSettings();
+            LampaUltimate.modules.vpn.checkAndRender(true);
+        };
+        if (vpnMode) vpnMode.onchange = function() {
+            LampaUltimate.modules.vpn.mode = vpnMode.value;
+            LampaUltimate.settings.vpn.mode = vpnMode.value;
+            LampaUltimate.saveSettings();
+            LampaUltimate.modules.vpn.checkAndRender(true);
+        };
+    };
+
+    // --- Встраиваем вкладку 'Модули' в меню ---
+    (function patchModulesTab() {
+        const origRenderMenu = LampaUltimate.renderMenu;
+        LampaUltimate.renderMenu = function() {
+            origRenderMenu.call(this);
+            let tabsBar = document.getElementById('lampa-ultimate-tabs');
+            let content = document.getElementById('lampa-ultimate-content');
+            if (!tabsBar || !content) return;
+            let origRenderTab = content.renderTab || function(tabId){};
+            content.renderTab = function(tabId) {
+                if (tabId === 'modules') {
+                    LampaUltimate.renderModulesTab(content);
+                } else {
+                    origRenderTab(tabId);
+                }
+            };
+        };
+    })();
 })();
