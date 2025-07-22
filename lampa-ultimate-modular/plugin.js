@@ -1,6 +1,3 @@
-(() => {
-    // Ожидаем полной загрузки API плагинов LAMPA
-    const initPlugin = () => {
         // Проверяем доступность API
         if (window.Plugin && typeof Plugin.register === 'function') {
             // Регистрируем плагин
@@ -306,7 +303,7 @@
                                 document.documentElement.style.removeProperty(key);
                             });
                         }
-                    };
+                     };
 
                     // Загрузка темы из localStorage
                     const savedTheme = localStorage.getItem('lum_theme');
@@ -319,6 +316,39 @@
                         if (e.type === 'ready') {
                             LUM.setupEventListeners();
                             LUM.init();
+                            
+                            // ПРАВКА: Перенесено сюда из destroy
+                            const button = document.createElement('div');
+                            button.innerHTML = `
+                                <div class="selector __margined __compact">
+                                    <div class="selector__title">Ultimate Modular</div>
+                                </div>
+                            `;
+                            button.style.margin = '15px';
+                            button.style.cursor = 'pointer';
+                            button.addEventListener('click', () => {
+                                alert('Ultimate Modular Plugin is working!');
+                            });
+                            
+                            const header = document.querySelector('.head__content');
+                            if (header) header.appendChild(button);
+                            
+                            // ПРАВКА: Перенесено сюда из destroy
+                            const css = `
+                                [data-ultimate-modular] {
+                                    transition: transform 0.2s;
+                                }
+                                [data-ultimate-modular]:hover {
+                                    transform: scale(1.05);
+                                }
+                                [data-ultimate-modular] .selector__icon {
+                                    background: linear-gradient(45deg, #6a11cb, #2575fc);
+                                }
+                            `;
+                            const style = document.createElement('style');
+                            style.id = 'ultimate-modular-styles';
+                            style.textContent = css;
+                            document.head.appendChild(style);
                         }
                     });
 
@@ -338,42 +368,7 @@
                     // Уничтожаем LUM
                     if (this.LUM && typeof this.LUM.destroy === 'function') {
                         this.LUM.destroy();
-                     // Пример: добавляем кнопку в интерфейс
-                    Lampa.Listener.follow('app', (e) => {
-                        if (e.type === 'ready') {
-                            const button = document.createElement('div');
-                            button.innerHTML = `
-                                <div class="selector __margined __compact">
-                                    <div class="selector__title">Ultimate Modular</div>
-                                </div>
-                            `;
-                            button.style.margin = '15px';
-                            button.style.cursor = 'pointer';
-                            button.addEventListener('click', () => {
-                                alert('Ultimate Modular Plugin is working!');
-                            });
-                            
-                            const header = document.querySelector('.head__content');
-                            if (header) header.appendChild(button);
-                        }
-                    });
-                    
-                    // Добавляем кастомные стили
-                    const css = `
-                        [data-ultimate-modular] {
-                            transition: transform 0.2s;
-                        }
-                        [data-ultimate-modular]:hover {
-                            transform: scale(1.05);
-                        }
-                        [data-ultimate-modular] .selector__icon {
-                            background: linear-gradient(45deg, #6a11cb, #2575fc);
-                        }
-                    `;
-                    const style = document.createElement('style');
-                    style.id = 'ultimate-modular-styles';
-                    style.textContent = css;
-                    document.head.appendChild(style);
+                    } // ПРАВКА: Добавлена закрывающая скобка
                 }
             });
         } else {
@@ -388,3 +383,4 @@
     } else {
         window.addEventListener('load', initPlugin);
     }
+})(); // ПРАВКА: Добавлены закрывающие скобки
