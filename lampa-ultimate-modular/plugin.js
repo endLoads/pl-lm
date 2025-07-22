@@ -1,9 +1,9 @@
-(function () {
+((function () {
     'use strict';
 
     // --- НАСТРОЙКИ ПЛАГИНА ---
     const PLUGIN_NAME = 'Lampa Ultimate Modular';
-    const PLUGIN_VERSION = '1.0.4'; // Обновляем версию
+    const PLUGIN_VERSION = '1.0.5'; // Обновили версию
     const THEMES_URL = 'https://endloads.github.io/pl-lm/lampa-ultimate-modular/assets/themes.js';
     const STYLES_URL = 'https://endloads.github.io/pl-lm/lampa-ultimate-modular/assets/styles.css';
 
@@ -37,47 +37,53 @@
 
         window.lampa_ultimate_modular = true;
 
-        Lampa.Component.add('lampa_ultimate_modular', { /* ... */ });
-
-        // Создаем контейнер для нашего пункта в настройках
-        const settingsItem = document.createElement("div");
-        settingsItem.classList.add('settings-folder');
-
-        // Заголовок
-        const settingsHeader = document.createElement("div");
-        settingsHeader.classList.add('settings-folder__header');
-        settingsHeader.innerText = PLUGIN_NAME;
-        settingsItem.appendChild(settingsHeader);
-
-        // Контент
-        const settingsContent = document.createElement("div");
-        settingsContent.classList.add('settings-folder__content');
-        settingsItem.appendChild(settingsContent);
-
-        // Блок с информацией
-        const infoBlock = document.createElement('div');
-        infoBlock.classList.add('settings-folder__content-item'); // Для правильных отступов
-        infoBlock.innerHTML = [
-            `<div class="settings-folder__title">О плагине</div>`,
-            `<div class="settings-folder__description">Версия: <b>${PLUGIN_VERSION}</b><br>Автор: <b>endLoads</b></div>`
-        ].join('');
-        settingsContent.appendChild(infoBlock);
-
-        // Блок с кнопкой
-        const buttonBlock = document.createElement('div');
-        buttonBlock.classList.add('settings-folder__content-item');
-        const exampleButton = document.createElement('div');
-        exampleButton.classList.add('settings-button', 'selector');
-        exampleButton.innerText = 'Показать уведомление';
-        exampleButton.addEventListener('click', function() {
-            Lampa.Noty.show('Плагин Ultimate Modular успешно работает!');
+        Lampa.Component.add('lampa_ultimate_modular', {
+            name: PLUGIN_NAME,
+            version: PLUGIN_VERSION,
+            props: {}, templates: {}, data: {}, methods: {},
+            onRender: function() { console.log(`${PLUGIN_NAME}: Компонент отрисован`) },
+            onCreate: function() { console.log(`${PLUGIN_NAME}: Компонент создан`) },
+            onDestroy: function() { console.log(`${PLUGIN_NAME}: Компонент уничтожен`) }
         });
-        buttonBlock.appendChild(exampleButton);
-        settingsContent.appendChild(buttonBlock);
-        
-        // ----- ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ -----
-        // Используем метод .append() компонента настроек, чтобы безопасно добавить наш элемент.
-        Lampa.Settings.main().append(settingsItem);
+
+        // ----- ИСПРАВЛЕНИЕ: Добавляем через слушатель события -----
+        Lampa.Settings.listener.follow('open', function(e) {
+            if (e.name === 'main') { // Проверяем, что открыто главное меню настроек
+                const settingsItem = document.createElement("div");
+                settingsItem.classList.add('settings-folder');
+
+                const settingsHeader = document.createElement("div");
+                settingsHeader.classList.add('settings-folder__header');
+                settingsHeader.innerText = PLUGIN_NAME;
+                settingsItem.appendChild(settingsHeader);
+
+                const settingsContent = document.createElement("div");
+                settingsContent.classList.add('settings-folder__content');
+                settingsItem.appendChild(settingsContent);
+
+                const infoBlock = document.createElement('div');
+                infoBlock.classList.add('settings-folder__content-item');
+                infoBlock.innerHTML = [
+                    `<div class="settings-folder__title">О плагине</div>`,
+                    `<div class="settings-folder__description">Версия: <b>${PLUGIN_VERSION}</b><br>Автор: <b>endLoads</b></div>`
+                ].join('');
+                settingsContent.appendChild(infoBlock);
+
+                const buttonBlock = document.createElement('div');
+                buttonBlock.classList.add('settings-folder__content-item');
+                const exampleButton = document.createElement('div');
+                exampleButton.classList.add('settings-button', 'selector');
+                exampleButton.innerText = 'Показать уведомление';
+                exampleButton.addEventListener('click', function() {
+                    Lampa.Noty.show('Плагин Ultimate Modular успешно работает!');
+                });
+                buttonBlock.appendChild(exampleButton);
+                settingsContent.appendChild(buttonBlock);
+
+                // Добавляем в тело меню
+                e.body.append(settingsItem);
+            }
+        });
         // ------------------------------------
 
         if (window.myThemes && Array.isArray(window.myThemes)) {
