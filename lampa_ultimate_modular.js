@@ -1397,6 +1397,182 @@
     });
     // ... другие модули по аналогии
 
+    // --- Настройки Telegram-бота ---
+    LampaUltimate.settings.telegram = LampaUltimate.settings.telegram || {
+        botToken: '', // <-- сюда вставить токен вашего Telegram-бота
+        chatId: '',   // <-- сюда вставить chat_id (ваш или канала)
+        supportLink: 'https://t.me/your_channel_or_chat' // ссылка на поддержку/новости
+    };
+    // Для подключения Telegram-бота:
+    // 1. Получите токен у @BotFather и вставьте в botToken
+    // 2. Узнайте chat_id через @userinfobot или API и вставьте в chatId
+    // 3. Укажите ссылку на канал/чат для кнопки поддержки
+
+    // --- Секция для кастомных SVG/PNG иконок/лого ---
+    // Пример: LampaUltimate.icons = { myIcon: 'data:image/svg+xml;utf8,<svg .../svg>' }
+    // Можно добавить свои SVG/PNG и использовать их в UI (см. комментарии в коде)
+    LampaUltimate.icons = {
+        // myIcon: 'data:image/svg+xml;utf8,<svg .../svg>'
+    };
+
+    // --- Модуль "Рекомендации" ---
+    LampaUltimate.modules.recommendations = {
+        enabled: true,
+        name: 'Рекомендации',
+        lastRandom: null,
+        getPersonalized(allCards) {
+            // Пример: топ-10 жанров пользователя
+            let genres = {};
+            let watched = allCards.filter(card => card.watched || card.is_watched || card.progress === 1);
+            watched.forEach(card => (card.genres||[]).forEach(g => genres[g] = (genres[g]||0)+1));
+            let topGenre = Object.entries(genres).sort((a,b)=>b[1]-a[1])[0]?.[0];
+            return allCards.filter(card => (card.genres||[]).includes(topGenre) && !watched.includes(card)).slice(0,10);
+        },
+        getSimilar(card, allCards) {
+            // Пример: похожие по жанру
+            return allCards.filter(c => c.id!==card.id && (c.genres||[]).some(g => (card.genres||[]).includes(g))).slice(0,10);
+        },
+        getRandom(allCards) {
+            let unwatched = allCards.filter(card => !(card.watched || card.is_watched || card.progress === 1));
+            this.lastRandom = unwatched[Math.floor(Math.random()*unwatched.length)];
+            return this.lastRandom;
+        }
+    };
+
+    // --- Модуль "Уведомления" ---
+    LampaUltimate.modules.notifications = {
+        enabled: true,
+        name: 'Уведомления',
+        reminders: [], // [{title, time, cardId}]
+        addReminder(title, time, cardId) {
+            this.reminders.push({title, time, cardId});
+            this.save();
+        },
+        save() {
+            localStorage.setItem('lampa_ultimate_reminders', JSON.stringify(this.reminders));
+        },
+        load() {
+            let r = localStorage.getItem('lampa_ultimate_reminders');
+            this.reminders = r ? JSON.parse(r) : [];
+        },
+        checkReminders() {
+            let now = Date.now();
+            this.reminders.forEach(rem => {
+                if (rem.time && now >= rem.time && !rem.notified) {
+                    this.notify(rem.title);
+                    rem.notified = true;
+                    // Telegram push
+                    LampaUltimate.modules.telegram.sendMessage(`Напоминание: ${rem.title}`);
+                }
+            });
+            this.save();
+        },
+        notify(msg) {
+            if (window.Notification && Notification.permission === 'granted') {
+                new Notification('Lampa', { body: msg });
+            } else {
+                alert(msg);
+            }
+        },
+        requestPermission() {
+            if (window.Notification && Notification.permission !== 'granted') {
+                Notification.requestPermission();
+            }
+        },
+        init() {
+            this.load();
+            this.requestPermission();
+            setInterval(()=>this.checkReminders(), 60000);
+        }
+    };
+
+    // --- Модуль "Telegram-интеграция" ---
+    LampaUltimate.modules.telegram = {
+        enabled: true,
+        name: 'Telegram',
+        sendMessage(msg) {
+            let token = LampaUltimate.settings.telegram.botToken;
+            let chat = LampaUltimate.settings.telegram.chatId;
+            if (!token || !chat) return;
+            fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ chat_id: chat, text: msg })
+            });
+        },
+        exportToTelegram(data, caption) {
+            this.sendMessage((caption||'Экспорт данных:') + '\n' + data);
+        },
+        importFromTelegram() {
+            // Можно реализовать через команду боту или ссылку
+        },
+        supportLink() {
+            return LampaUltimate.settings.telegram.supportLink;
+        }
+    };
+
+    // --- Вкладка "Рекомендации" в меню ---
+    const origRenderTabRecommendations = LampaUltimate.renderCustomMenu;
+    LampaUltimate.renderCustomMenu = function() {
+        origRenderTabRecommendations.call(this);
+        let tabsBar = document.getElementById('lampa-ultimate-tabs');
+        let content = document.getElementById('lampa-ultimate-content');
+        function renderTab(tabId) {
+            Array.from(tabsBar.children).forEach(btn => btn.style.borderBottom = 'none');
+            let activeBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === tabId);
+            if (activeBtn) activeBtn.style.borderBottom = '2px solid #00dbde';
+            if (tabId === 'recommendations') {
+                let allCards = window.Lampa && Lampa.Data && Lampa.Data.cards ? Lampa.Data.cards : [];
+                let rec = LampaUltimate.modules.recommendations;
+                let pers = rec.getPersonalized(allCards);
+                let html = `<h3>Персональные рекомендации</h3><ul style="list-style:none;padding:0;">`;
+                pers.forEach(card => { html += `<li>${card.title||card.name||card.original_title}</li>`; });
+                html += '</ul>';
+                html += `<button id="ultimate-random-btn">Случайный фильм</button>`;
+                content.innerHTML = html;
+                let randBtn = content.querySelector('#ultimate-random-btn');
+                if (randBtn) randBtn.onclick = function() {
+                    let rnd = rec.getRandom(allCards);
+                    alert('Случайный фильм: ' + (rnd?.title||rnd?.name||rnd?.original_title||'нет'));
+                };
+            }
+            if (tabId === 'notifications') {
+                let n = LampaUltimate.modules.notifications;
+                let html = `<h3>Уведомления и напоминания</h3><ul style="list-style:none;padding:0;">`;
+                n.reminders.forEach(rem => { html += `<li>${rem.title} (${new Date(rem.time).toLocaleString()})</li>`; });
+                html += '</ul>';
+                html += `<button id="ultimate-add-reminder">Добавить напоминание</button>`;
+                content.innerHTML = html;
+                let addBtn = content.querySelector('#ultimate-add-reminder');
+                if (addBtn) addBtn.onclick = function() {
+                    let title = prompt('Текст напоминания:');
+                    let time = prompt('Время (YYYY-MM-DD HH:MM):');
+                    if (title && time) {
+                        let t = new Date(time.replace(' ', 'T')).getTime();
+                        n.addReminder(title, t);
+                        alert('Напоминание добавлено!');
+                    }
+                };
+            }
+            if (tabId === 'telegram') {
+                let t = LampaUltimate.modules.telegram;
+                let html = `<h3>Интеграция с Telegram</h3>
+                <div>Бот: <b>${LampaUltimate.settings.telegram.botToken ? 'Подключен' : 'Не подключен'}</b></div>
+                <div>Чат/канал: <b>${LampaUltimate.settings.telegram.chatId||'-'}</b></div>
+                <div><a href="${t.supportLink()}" target="_blank" style="color:#00dbde;">Поддержка/Новости</a></div>
+                <button id="ultimate-tg-export">Экспорт профиля в Telegram</button>`;
+                content.innerHTML = html;
+                let expBtn = content.querySelector('#ultimate-tg-export');
+                if (expBtn) expBtn.onclick = function() {
+                    let name = LampaUltimate.settings.profiles.active;
+                    let data = LampaUltimate.modules.profiles.exportProfile(name);
+                    t.exportToTelegram(data, 'Экспорт профиля: ' + name);
+                    alert('Профиль отправлен в Telegram!');
+                };
+            }
+        }
+    };
+
     // Автоинициализация при загрузке
     setTimeout(() => LampaUltimate.init(), 1000);
 
