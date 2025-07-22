@@ -288,7 +288,7 @@
         }
     });
 
-}(window.Plugin = window.Plugin || {});
+)(window.Plugin = window.Plugin || {});
  // 1. Добавляем кнопку в главное меню
                     Lampa.Listener.follow('app', (e) => {
                         if (e.type === 'ready') {
