@@ -596,10 +596,120 @@
         }
     };
 
-    // --- Добавляем настройки бейджей в меню ---
-    const origRenderTab = LampaUltimate.renderCustomMenu;
+    // --- Модуль "Расширенные фильтры и сортировка" ---
+    LampaUltimate.modules.filters = {
+        enabled: true,
+        name: 'Фильтры и сортировка',
+        filters: {
+            quality: '',
+            genre: '',
+            country: '',
+            year: '',
+            source: '',
+            watched: '', // all | watched | unwatched
+        },
+        sort: 'date', // date | popularity | alpha | custom
+        search: '',
+        init() {
+            LampaUltimate.settings.filters = LampaUltimate.settings.filters || {
+                filters: {
+                    quality: '', genre: '', country: '', year: '', source: '', watched: ''
+                },
+                sort: 'date',
+                search: ''
+            };
+            this.filters = Object.assign({}, LampaUltimate.settings.filters.filters);
+            this.sort = LampaUltimate.settings.filters.sort;
+            this.search = LampaUltimate.settings.filters.search;
+            // Патчим рендер списков
+            const origRenderList = window.Lampa && Lampa.List && Lampa.List.render;
+            if (origRenderList && !Lampa.List._ultimateFilterPatched) {
+                Lampa.List.render = function(items, ...args) {
+                    let filtered = items;
+                    // Фильтрация
+                    let f = LampaUltimate.modules.filters.filters;
+                    if (f.quality) filtered = filtered.filter(card => (card.quality||'').toLowerCase().includes(f.quality));
+                    if (f.genre) filtered = filtered.filter(card => (card.genre_ids||[]).includes(f.genre) || (card.genres||[]).includes(f.genre));
+                    if (f.country) filtered = filtered.filter(card => (card.country||'').toLowerCase().includes(f.country));
+                    if (f.year) filtered = filtered.filter(card => (card.release_date||'').startsWith(f.year));
+                    if (f.source) filtered = filtered.filter(card => (card.source||'').toLowerCase().includes(f.source));
+                    if (f.watched === 'watched') filtered = filtered.filter(card => isWatched(card));
+                    if (f.watched === 'unwatched') filtered = filtered.filter(card => !isWatched(card));
+                    // Поиск
+                    let s = (LampaUltimate.modules.filters.search||'').toLowerCase();
+                    if (s) filtered = filtered.filter(card => {
+                        return (card.title||'').toLowerCase().includes(s) ||
+                            (card.original_title||'').toLowerCase().includes(s) ||
+                            (card.name||'').toLowerCase().includes(s) ||
+                            (card.actors||'').toLowerCase().includes(s) ||
+                            (card.genres||[]).join(',').toLowerCase().includes(s);
+                    });
+                    // Сортировка
+                    let sort = LampaUltimate.modules.filters.sort;
+                    if (sort === 'date') filtered = filtered.sort((a,b) => (b.release_date||'').localeCompare(a.release_date||''));
+                    if (sort === 'popularity') filtered = filtered.sort((a,b) => (b.popularity||0)-(a.popularity||0));
+                    if (sort === 'alpha') filtered = filtered.sort((a,b) => (a.title||'').localeCompare(b.title||''));
+                    // custom — не реализовано (можно добавить drag&drop)
+                    return origRenderList.call(this, filtered, ...args);
+                };
+                Lampa.List._ultimateFilterPatched = true;
+            }
+            // Быстрый UI-фильтр и поиск на главном экране
+            setTimeout(() => {
+                if (!document.getElementById('ultimate-search-bar')) {
+                    let bar = document.createElement('div');
+                    bar.id = 'ultimate-search-bar';
+                    bar.style = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:999999;background:#222;color:#fff;padding:8px 18px;border-radius:12px;font-size:1.1em;box-shadow:0 2px 12px #0008;display:flex;gap:10px;align-items:center;';
+                    bar.innerHTML = `
+                        <input id="ultimate-search-input" type="text" placeholder="Поиск..." style="font-size:1em;padding:4px 10px;border-radius:6px;border:none;outline:none;">
+                        <select id="ultimate-sort-select">
+                            <option value="date">По дате</option>
+                            <option value="popularity">По популярности</option>
+                            <option value="alpha">По алфавиту</option>
+                        </select>
+                        <button id="ultimate-clear-search" style="background:#00dbde;color:#fff;border:none;border-radius:6px;padding:4px 10px;">×</button>
+                    `;
+                    document.body.appendChild(bar);
+                    let input = bar.querySelector('#ultimate-search-input');
+                    let sortSel = bar.querySelector('#ultimate-sort-select');
+                    let clearBtn = bar.querySelector('#ultimate-clear-search');
+                    input.value = LampaUltimate.modules.filters.search;
+                    sortSel.value = LampaUltimate.modules.filters.sort;
+                    input.oninput = function() {
+                        LampaUltimate.modules.filters.search = input.value;
+                        LampaUltimate.settings.filters.search = input.value;
+                        LampaUltimate.saveSettings();
+                        let ev = new Event('ultimate-filter-update');
+                        document.dispatchEvent(ev);
+                    };
+                    sortSel.onchange = function() {
+                        LampaUltimate.modules.filters.sort = sortSel.value;
+                        LampaUltimate.settings.filters.sort = sortSel.value;
+                        LampaUltimate.saveSettings();
+                        let ev = new Event('ultimate-filter-update');
+                        document.dispatchEvent(ev);
+                    };
+                    clearBtn.onclick = function() {
+                        input.value = '';
+                        LampaUltimate.modules.filters.search = '';
+                        LampaUltimate.settings.filters.search = '';
+                        LampaUltimate.saveSettings();
+                        let ev = new Event('ultimate-filter-update');
+                        document.dispatchEvent(ev);
+                    };
+                }
+            }, 1000);
+            // Вспомогательная функция
+            function isWatched(card) {
+                return card.watched === true || card.is_watched === true || card.progress === 1 || card.seen === true;
+            }
+        }
+    };
+
+    // --- Добавляем настройки фильтров и сортировки в меню ---
+    const origRenderTabFilters = LampaUltimate.renderCustomMenu;
     LampaUltimate.renderCustomMenu = function() {
-        origRenderTab.call(this);
+        origRenderTabFilters.call(this);
         // Добавляем настройки во вкладку "Модули"
         let content = document.getElementById('lampa-ultimate-content');
         let tabsBar = document.getElementById('lampa-ultimate-tabs');
@@ -615,56 +725,27 @@
                             <input type="checkbox" data-mod="${key}" ${mod.enabled ? 'checked' : ''} style="width:20px;height:20px;">
                             <span style="font-size:1.1em;">${mod.name}</span>
                         </label>`;
-                    if (key === 'badges') {
-                        html += `<div style="margin-left:30px;margin-top:5px;">
-                            <label>Стиль бейджей:
-                                <select id="badges-style">
-                                    <option value="color" ${LampaUltimate.settings.badges.style==='color'?'selected':''}>Цветные</option>
-                                    <option value="minimal" ${LampaUltimate.settings.badges.style==='minimal'?'selected':''}>Минимал</option>
-                                    <option value="icon" ${LampaUltimate.settings.badges.style==='icon'?'selected':''}>С иконками</option>
-                                </select>
-                            </label>
-                            <label style="margin-left:20px;">Показывать:
-                                <select id="badges-show">
-                                    <option value="both" ${LampaUltimate.settings.badges.show==='both'?'selected':''}>Качество и серии</option>
-                                    <option value="quality" ${LampaUltimate.settings.badges.show==='quality'?'selected':''}>Только качество</option>
-                                    <option value="episodes" ${LampaUltimate.settings.badges.show==='episodes'?'selected':''}>Только серии</option>
-                                    <option value="none" ${LampaUltimate.settings.badges.show==='none'?'selected':''}>Ничего</option>
-                                </select>
-                            </label>
+                    if (key === 'filters') {
+                        html += `<div style="margin-left:30px;margin-top:5px;display:flex;flex-wrap:wrap;gap:10px;">
+                            <label>Качество: <input id="filter-quality" type="text" value="${mod.filters.quality||''}" style="width:80px;"></label>
+                            <label>Жанр: <input id="filter-genre" type="text" value="${mod.filters.genre||''}" style="width:80px;"></label>
+                            <label>Страна: <input id="filter-country" type="text" value="${mod.filters.country||''}" style="width:80px;"></label>
+                            <label>Год: <input id="filter-year" type="text" value="${mod.filters.year||''}" style="width:60px;"></label>
+                            <label>Источник: <input id="filter-source" type="text" value="${mod.filters.source||''}" style="width:80px;"></label>
+                            <label>Статус: <select id="filter-watched">
+                                <option value="">Все</option>
+                                <option value="watched" ${mod.filters.watched==='watched'?'selected':''}>Просмотренные</option>
+                                <option value="unwatched" ${mod.filters.watched==='unwatched'?'selected':''}>Непросмотренные</option>
+                            </select></label>
                         </div>`;
-                    }
-                    if (key === 'logos') {
                         html += `<div style="margin-left:30px;margin-top:5px;">
-                            <label>Стиль логотипа:
-                                <select id="logos-style">
-                                    <option value="color" ${LampaUltimate.settings.logos.style==='color'?'selected':''}>Цветной</option>
-                                    <option value="mono" ${LampaUltimate.settings.logos.style==='mono'?'selected':''}>Монохром</option>
-                                    <option value="outline" ${LampaUltimate.settings.logos.style==='outline'?'selected':''}>Outline</option>
+                            <label>Сортировка:
+                                <select id="filter-sort">
+                                    <option value="date" ${mod.sort==='date'?'selected':''}>По дате</option>
+                                    <option value="popularity" ${mod.sort==='popularity'?'selected':''}>По популярности</option>
+                                    <option value="alpha" ${mod.sort==='alpha'?'selected':''}>По алфавиту</option>
                                 </select>
                             </label>
-                            <label style="margin-left:20px;">Fallback:
-                                <select id="logos-fallback">
-                                    <option value="poster" ${LampaUltimate.settings.logos.fallback==='poster'?'selected':''}>Постер</option>
-                                    <option value="title" ${LampaUltimate.settings.logos.fallback==='title'?'selected':''}>Название</option>
-                                </select>
-                            </label>
-                        </div>`;
-                    }
-                    if (key === 'vpn') {
-                        html += `<div style="margin-left:30px;margin-top:5px;">
-                            <label>Режим:
-                                <select id="vpn-mode">
-                                    <option value="detailed" ${LampaUltimate.settings.vpn.mode==='detailed'?'selected':''}>Подробный</option>
-                                    <option value="short" ${LampaUltimate.settings.vpn.mode==='short'?'selected':''}>Краткий</option>
-                                </select>
-                            </label>
-                        </div>`;
-                    }
-                    if (key === 'hideWatched') {
-                        html += `<div style="margin-left:30px;margin-top:5px;">
-                            <label><input type="checkbox" id="hide-watched-enabled" ${LampaUltimate.settings.hideWatched.enabled?'checked':''}> Скрывать просмотренные</label>
-                            <label style="margin-left:20px;"><input type="checkbox" id="hide-watched-onlynew" ${LampaUltimate.settings.hideWatched.onlyNew?'checked':''}> Только новые</label>
                         </div>`;
                     }
                     html += '</li>';
@@ -679,58 +760,21 @@
                         LampaUltimate.saveSettings();
                     };
                 });
-                // Настройки бейджей
-                let styleSel = content.querySelector('#badges-style');
-                let showSel = content.querySelector('#badges-show');
-                if (styleSel) styleSel.onchange = function() {
-                    LampaUltimate.settings.badges.style = styleSel.value;
-                    LampaUltimate.modules.badges.style = styleSel.value;
-                    LampaUltimate.saveSettings();
-                };
-                if (showSel) showSel.onchange = function() {
-                    LampaUltimate.settings.badges.show = showSel.value;
-                    LampaUltimate.modules.badges.show = showSel.value;
-                    LampaUltimate.saveSettings();
-                };
-                // Настройки логотипов
-                let logoStyleSel = content.querySelector('#logos-style');
-                let logoFallbackSel = content.querySelector('#logos-fallback');
-                if (logoStyleSel) logoStyleSel.onchange = function() {
-                    LampaUltimate.settings.logos.style = logoStyleSel.value;
-                    LampaUltimate.modules.logos.style = logoStyleSel.value;
-                    LampaUltimate.saveSettings();
-                };
-                if (logoFallbackSel) logoFallbackSel.onchange = function() {
-                    LampaUltimate.settings.logos.fallback = logoFallbackSel.value;
-                    LampaUltimate.modules.logos.fallback = logoFallbackSel.value;
-                    LampaUltimate.saveSettings();
-                };
-                // Настройки VPN
-                let vpnModeSel = content.querySelector('#vpn-mode');
-                if (vpnModeSel) vpnModeSel.onchange = function() {
-                    LampaUltimate.settings.vpn.mode = vpnModeSel.value;
-                    LampaUltimate.modules.vpn.mode = vpnModeSel.value;
-                    LampaUltimate.saveSettings();
-                    LampaUltimate.modules.vpn.checkAndRender(true);
-                };
-                // Настройки скрытия просмотренных
-                let hideWatchedChk = content.querySelector('#hide-watched-enabled');
-                let onlyNewChk = content.querySelector('#hide-watched-onlynew');
-                if (hideWatchedChk) hideWatchedChk.onchange = function() {
-                    LampaUltimate.settings.hideWatched.enabled = hideWatchedChk.checked;
-                    LampaUltimate.modules.hideWatched.enabled = hideWatchedChk.checked;
-                    LampaUltimate.saveSettings();
-                    // Триггерим обновление списков
-                    let ev = new Event('ultimate-filter-update');
-                    document.dispatchEvent(ev);
-                };
-                if (onlyNewChk) onlyNewChk.onchange = function() {
-                    LampaUltimate.settings.hideWatched.onlyNew = onlyNewChk.checked;
-                    LampaUltimate.modules.hideWatched.onlyNew = onlyNewChk.checked;
-                    LampaUltimate.saveSettings();
-                    let ev = new Event('ultimate-filter-update');
-                    document.dispatchEvent(ev);
-                };
+                // Настройки фильтров
+                let q = content.querySelector('#filter-quality');
+                let g = content.querySelector('#filter-genre');
+                let c = content.querySelector('#filter-country');
+                let y = content.querySelector('#filter-year');
+                let s = content.querySelector('#filter-source');
+                let w = content.querySelector('#filter-watched');
+                let sortSel = content.querySelector('#filter-sort');
+                if (q) q.oninput = function() { LampaUltimate.modules.filters.filters.quality = q.value.toLowerCase(); LampaUltimate.settings.filters.filters.quality = q.value.toLowerCase(); LampaUltimate.saveSettings(); let ev = new Event('ultimate-filter-update'); document.dispatchEvent(ev); };
+                if (g) g.oninput = function() { LampaUltimate.modules.filters.filters.genre = g.value.toLowerCase(); LampaUltimate.settings.filters.filters.genre = g.value.toLowerCase(); LampaUltimate.saveSettings(); let ev = new Event('ultimate-filter-update'); document.dispatchEvent(ev); };
+                if (c) c.oninput = function() { LampaUltimate.modules.filters.filters.country = c.value.toLowerCase(); LampaUltimate.settings.filters.filters.country = c.value.toLowerCase(); LampaUltimate.saveSettings(); let ev = new Event('ultimate-filter-update'); document.dispatchEvent(ev); };
+                if (y) y.oninput = function() { LampaUltimate.modules.filters.filters.year = y.value; LampaUltimate.settings.filters.filters.year = y.value; LampaUltimate.saveSettings(); let ev = new Event('ultimate-filter-update'); document.dispatchEvent(ev); };
+                if (s) s.oninput = function() { LampaUltimate.modules.filters.filters.source = s.value.toLowerCase(); LampaUltimate.settings.filters.filters.source = s.value.toLowerCase(); LampaUltimate.saveSettings(); let ev = new Event('ultimate-filter-update'); document.dispatchEvent(ev); };
+                if (w) w.onchange = function() { LampaUltimate.modules.filters.filters.watched = w.value; LampaUltimate.settings.filters.filters.watched = w.value; LampaUltimate.saveSettings(); let ev = new Event('ultimate-filter-update'); document.dispatchEvent(ev); };
+                if (sortSel) sortSel.onchange = function() { LampaUltimate.modules.filters.sort = sortSel.value; LampaUltimate.settings.filters.sort = sortSel.value; LampaUltimate.saveSettings(); let ev = new Event('ultimate-filter-update'); document.dispatchEvent(ev); };
             };
         }
     };
