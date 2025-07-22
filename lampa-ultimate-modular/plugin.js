@@ -1,24 +1,14 @@
 (function () {
     'use strict';
 
-    /**
-     * Эта функция-обёртка (IIFE) создаёт изолированное пространство для плагина.
-     * Она защищает переменные плагина от конфликтов с переменными LAMPA и других плагинов.
-     */
-
     // --- НАСТРОЙКИ ПЛАГИНА ---
     const PLUGIN_NAME = 'Lampa Ultimate Modular';
-    const PLUGIN_VERSION = '1.0.2'; // Обновил версию для наглядности
+    const PLUGIN_VERSION = '1.0.3'; // Снова обновил версию
     const THEMES_URL = 'https://endloads.github.io/pl-lm/lampa-ultimate-modular/assets/themes.js';
     const STYLES_URL = 'https://endloads.github.io/pl-lm/lampa-ultimate-modular/assets/styles.css';
 
     // --- УТИЛИТЫ ДЛЯ БЕЗОПАСНОЙ ЗАГРУЗКИ ---
 
-    /**
-     * Асинхронно загружает внешний JS-файл и возвращает Promise.
-     * @param {string} url 
-     * @returns {Promise<void>}
-     */
     function loadScript(url) {
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
@@ -29,11 +19,6 @@
         });
     }
 
-    /**
-     * Асинхронно загружает внешний CSS-файл и возвращает Promise.
-     * @param {string} url 
-     * @returns {Promise<void>}
-     */
     function loadStyles(url) {
         return new Promise((resolve, reject) => {
             const link = document.createElement('link');
@@ -47,50 +32,61 @@
 
     // --- ОСНОВНАЯ ЛОГИКА ВАШЕГО ПЛАГИНА ---
 
-    /**
-     * Эта функция будет вызвана только ПОСЛЕ того, как LAMPA будет готова
-     * и все внешние скрипты и стили будут успешно загружены.
-     */
     function initializePlugin() {
         console.log(`${PLUGIN_NAME} v${PLUGIN_VERSION}: Инициализация...`);
 
         window.lampa_ultimate_modular = true;
 
-        const component = {
+        Lampa.Component.add('lampa_ultimate_modular', {
             name: PLUGIN_NAME,
             version: PLUGIN_VERSION,
             props: {}, templates: {}, data: {}, methods: {},
             onRender: function() { console.log(`${PLUGIN_NAME}: Компонент отрисован`) },
             onCreate: function() { console.log(`${PLUGIN_NAME}: Компонент создан`) },
             onDestroy: function() { console.log(`${PLUGIN_NAME}: Компонент уничтожен`) }
-        };
-        Lampa.Component.add('lampa_ultimate_modular', component);
+        });
 
+        // Создаем главный контейнер для нашего пункта в настройках
         const settingsItem = document.createElement("div");
-        settingsItem.innerText = PLUGIN_NAME;
-        
-        const settingsDescr = Lampa.Settings.p(settingsItem, '');
-        
+        settingsItem.classList.add('settings-folder'); // Используем классы LAMPA для стилизации
+
+        // Создаем заголовок нашего пункта
+        const settingsHeader = document.createElement("div");
+        settingsHeader.classList.add('settings-folder__header');
+        settingsHeader.innerText = PLUGIN_NAME;
+        settingsItem.appendChild(settingsHeader);
+
+        // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
+        // Создаем контейнер для контента (описания, кнопок) вручную,
+        // вместо вызова несуществующей Lampa.Settings.p()
+        const settingsContent = document.createElement("div");
+        settingsContent.classList.add('settings-folder__content');
+        settingsItem.appendChild(settingsContent);
+        // -----------------------------
+
         const info = [
             `Версия: <b>${PLUGIN_VERSION}</b>`,
             `Автор: <b>endLoads</b>`,
             `Статус: <b style="color: #4CAF50;">Активен</b>`
         ].join('<br>');
 
-        settingsDescr.innerHTML = info;
+        // Добавляем информацию и кнопку в наш новый контейнер
+        const infoBlock = document.createElement('div');
+        infoBlock.style.padding = '0 1.5em 1.5em'; // Добавим отступы для красоты
+        infoBlock.innerHTML = info;
+        settingsContent.appendChild(infoBlock);
 
         const exampleButton = document.createElement('div');
         exampleButton.classList.add('settings-button', 'selector');
         exampleButton.innerText = 'Показать уведомление';
+        exampleButton.style.margin = '0 1.5em'; // Отступ для кнопки
         exampleButton.addEventListener('click', function() {
             Lampa.Noty.show('Плагин Ultimate Modular успешно работает!');
         });
-        settingsDescr.appendChild(exampleButton);
+        settingsContent.appendChild(exampleButton);
         
-        // ----- ИСПРАВЛЕНИЕ ЗДЕСЬ -----
-        // Получаем HTML-элемент главного меню через .render() и добавляем в него наш пункт.
+        // Добавляем весь наш созданный блок в главное меню настроек
         Lampa.Settings.main().render().appendChild(settingsItem);
-        // -----------------------------
 
         if (window.myThemes && Array.isArray(window.myThemes)) {
             console.log(`${PLUGIN_NAME}: Найдено ${window.myThemes.length} тем для добавления.`);
@@ -115,8 +111,7 @@
             initializePlugin();
         })
         .catch(error => {
-            // Уточнил сообщение об ошибке
-            console.error(`${PLUGIN_NAME}: Ошибка во время инициализации плагина.`, error);
+            console.error(`${PLUGIN_NAME}: Ошибка во время инициализации или загрузки.`, error);
             Lampa.Noty.show(`Ошибка плагина ${PLUGIN_NAME}. Подробности в консоли.`, {time: 5000});
         });
     }
