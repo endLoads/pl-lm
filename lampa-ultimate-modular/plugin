@@ -1,0 +1,201 @@
+(() => {
+    // Ожидаем загрузки API плагинов LAMPA
+    const initPlugin = () => {
+        if (window.Plugin && typeof Plugin.register === 'function') {
+            // Регистрируем плагин
+            Plugin.register('ultimate_modular', {
+                version: '1.0.0',
+                icon: 'icon.png',
+                init: function() {
+                    console.log('[Ultimate Modular] Plugin initialized!');
+                    
+                    // Основной функционал плагина
+                    const LUM = {
+                        init() {
+                            this.applyTheme();
+                            this.addMenuButton();
+                            this.addSettingsMenu();
+                        },
+                        
+                        // Добавляем кнопку в меню
+                        addMenuButton() {
+                            Lampa.Listener.follow('app', (e) => {
+                                if (e.type === 'ready') {
+                                    const button = document.createElement('div');
+                                    button.classList.add('selector', '__margined', '__compact');
+                                    button.innerHTML = `
+                                        <div class="selector__icon" style="background: linear-gradient(45deg, #6a11cb, #2575fc);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                                                <path fill="currentColor" d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7Z"/>
+                                            </svg>
+                                        </div>
+                                        <div class="selector__title">Ultimate Modular</div>
+                                    `;
+                                    button.style.margin = '15px';
+                                    button.style.cursor = 'pointer';
+                                    
+                                    button.addEventListener('click', () => {
+                                        Lampa.SettingsMenu.show('ultimate_modular');
+                                    });
+                                    
+                                    const header = document.querySelector('.head__content');
+                                    if (header && !document.querySelector('[data-lum-button]')) {
+                                        button.setAttribute('data-lum-button', 'true');
+                                        header.appendChild(button);
+                                    }
+                                }
+                            });
+                        },
+                        
+                        // Добавляем меню настроек
+                        addSettingsMenu() {
+                            Lampa.SettingsMenu.add('ultimate_modular', {
+                                name: 'Ultimate Modular',
+                                icon: 'icon.png',
+                                component: {
+                                    template: `
+                                        <div class="settings">
+                                            <div class="settings__title">Ultimate Modular</div>
+                                            <div class="settings-list">
+                                                <div class="settings-list__item">
+                                                    <div class="settings-list__name">Активировать модуль карточек</div>
+                                                    <div class="settings-list__value">
+                                                        <div class="switch">
+                                                            <input type="checkbox" id="cards_module" checked>
+                                                            <label for="cards_module"></label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="settings-list__item">
+                                                    <div class="settings-list__name">Показать рейтинги</div>
+                                                    <div class="settings-list__value">
+                                                        <div class="switch">
+                                                            <input type="checkbox" id="ratings_module" checked>
+                                                            <label for="ratings_module"></label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="settings-list__item">
+                                                    <div class="settings-list__name">Тема оформления</div>
+                                                    <div class="settings-list__value">
+                                                        <select id="theme_select">
+                                                            <option value="dark">Темная</option>
+                                                            <option value="light">Светлая</option>
+                                                            <option value="blue">Синяя</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `,
+                                    mounted() {
+                                        // Загружаем сохраненные настройки
+                                        const savedTheme = localStorage.getItem('lum_theme') || 'dark';
+                                        this.html.find('#theme_select').val(savedTheme);
+                                        
+                                        // Обработчики событий
+                                        this.html.find('input[type="checkbox"]').on('change', (e) => {
+                                            console.log('Module toggled:', e.target.id, e.target.checked);
+                                        });
+                                        
+                                        this.html.find('#theme_select').on('change', (e) => {
+                                            const theme = e.target.value;
+                                            localStorage.setItem('lum_theme', theme);
+                                            LUM.applyTheme(theme);
+                                        });
+                                    }
+                                }
+                            });
+                        },
+                        
+                        // Применяем тему
+                        applyTheme(theme) {
+                            const themes = {
+                                dark: {
+                                    '--primary': '#00c8c8',
+                                    '--secondary': '#007a7a',
+                                    '--accent': '#ff3c5a',
+                                    '--dark': '#0f1a1f',
+                                    '--card-bg': '#1a2a2f',
+                                    '--text': '#e0f0f0'
+                                },
+                                light: {
+                                    '--primary': '#1a73e8',
+                                    '--secondary': '#0d47a1',
+                                    '--accent': '#f57c00',
+                                    '--dark': '#f5f5f5',
+                                    '--card-bg': '#ffffff',
+                                    '--text': '#212121'
+                                },
+                                blue: {
+                                    '--primary': '#2196f3',
+                                    '--secondary': '#0d47a1',
+                                    '--accent': '#ff9800',
+                                    '--dark': '#0d1b2a',
+                                    '--card-bg': '#1b263b',
+                                    '--text': '#e0e1dd'
+                                }
+                            };
+                            
+                            const selectedTheme = themes[theme] || themes.dark;
+                            
+                            Object.entries(selectedTheme).forEach(([key, value]) => {
+                                document.documentElement.style.setProperty(key, value);
+                            });
+                        }
+                    };
+                    
+                    // Инициализация плагина
+                    Lampa.Listener.follow('app', (e) => {
+                        if (e.type === 'ready') {
+                            LUM.init();
+                            
+                            // Применяем сохраненную тему
+                            const savedTheme = localStorage.getItem('lum_theme');
+                            if (savedTheme) {
+                                LUM.applyTheme(savedTheme);
+                            }
+                        }
+                    });
+                    
+                    // Сохраняем ссылку для destroy
+                    this.LUM = LUM;
+                },
+                destroy: function() {
+                    console.log('[Ultimate Modular] Plugin destroyed');
+                    
+                    // Удаляем кнопку
+                    document.querySelectorAll('[data-lum-button]').forEach(el => el.remove());
+                    
+                    // Удаляем меню настроек
+                    if (Lampa.SettingsMenu) {
+                        Lampa.SettingsMenu.remove('ultimate_modular');
+                    }
+                    
+                    // Восстанавливаем стандартную тему LAMPA
+                    const defaultTheme = {
+                        '--primary': '#ff2e2e',
+                        '--secondary': '#a10000',
+                        '--accent': '#00c3ff',
+                        '--dark': '#0f0f0f',
+                        '--card-bg': '#1a1a1a',
+                        '--text': '#ffffff'
+                    };
+                    
+                    Object.entries(defaultTheme).forEach(([key, value]) => {
+                        document.documentElement.style.setProperty(key, value);
+                    });
+                }
+            });
+        } else {
+            setTimeout(initPlugin, 100);
+        }
+    };
+
+    // Запускаем инициализацию
+    if (document.readyState === 'complete') {
+        initPlugin();
+    } else {
+        window.addEventListener('load', initPlugin);
+    }
+})();
