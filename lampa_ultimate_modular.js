@@ -290,7 +290,7 @@ Lampa Ultimate Modular Plugin
     };
 
     // --- Модуль "Бейджи качества и серий" ---
-    LampaUltimate.modules.badges = Object.assign(LampaUltimate.modules.badges, {
+    LampaUltimate.modules.badges = Object.assign(LampaUltimate.modules.badges || {}, {
         style: 'color', // color | minimal | icon
         show: 'both',   // quality | episodes | both | none
         init() {
@@ -358,7 +358,7 @@ Lampa Ultimate Modular Plugin
     });
 
     // --- Модуль "Оригинальные логотипы" ---
-    LampaUltimate.modules.logos = Object.assign(LampaUltimate.modules.logos, {
+    LampaUltimate.modules.logos = Object.assign(LampaUltimate.modules.logos || {}, {
         style: 'color', // color | mono | outline
         fallback: 'poster', // poster | title
         cache: {},
@@ -436,7 +436,7 @@ Lampa Ultimate Modular Plugin
     });
 
     // --- Модуль "VPN Checker" ---
-    LampaUltimate.modules.vpn = Object.assign(LampaUltimate.modules.vpn, {
+    LampaUltimate.modules.vpn = Object.assign(LampaUltimate.modules.vpn || {}, {
         mode: 'detailed', // detailed | short
         enabled: false,
         lastResult: null,
