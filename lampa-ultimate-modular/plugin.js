@@ -52,4 +52,90 @@
                 console.log(`${PLUGIN_NAME}: Компонент создан.`);
             },
             onDestroy: function() {
-                console.log(`${PLUGIN_NAME
+                console.log(`${PLUGIN_NAME}: Компонент уничтожен.`);
+            }
+        });
+
+        // Добавляем пункт в меню через слушатель события (как в предыдущей версии)
+        Lampa.Settings.listener.follow('open', function(e) {
+            if (e.name === 'main') {
+                console.log(`${PLUGIN_NAME}: Главное меню настроек открыто, добавляем пункт.`);
+
+                const settingsItem = document.createElement("div");
+                settingsItem.classList.add('settings-folder');
+
+                const settingsHeader = document.createElement("div");
+                settingsHeader.classList.add('settings-folder__header');
+                settingsHeader.innerText = PLUGIN_NAME;
+                settingsItem.appendChild(settingsHeader);
+
+                const settingsContent = document.createElement("div");
+                settingsContent.classList.add('settings-folder__content');
+                settingsItem.appendChild(settingsContent);
+
+                const infoBlock = document.createElement('div');
+                infoBlock.classList.add('settings-folder__content-item');
+                infoBlock.innerHTML = [
+                    `<div class="settings-folder__title">О плагине</div>`,
+                    `<div class="settings-folder__description">Версия: <b>${PLUGIN_VERSION}</b><br>Автор: <b>endLoads</b><br>Статус: <b style="color: #4CAF50;">Активен</b></div>`
+                ].join('');
+                settingsContent.appendChild(infoBlock);
+
+                const buttonBlock = document.createElement('div');
+                buttonBlock.classList.add('settings-folder__content-item');
+                const exampleButton = document.createElement('div');
+                exampleButton.classList.add('settings-button', 'selector');
+                exampleButton.innerText = 'Показать уведомление';
+                exampleButton.addEventListener('click', function() {
+                    Lampa.Noty.show('Плагин Ultimate Modular успешно работает!');
+                });
+                buttonBlock.appendChild(exampleButton);
+                settingsContent.appendChild(buttonBlock);
+
+                // Добавляем в тело меню
+                e.body.append(settingsItem);
+            }
+        });
+
+        if (window.myThemes && Array.isArray(window.myThemes)) {
+            console.log(`${PLUGIN_NAME}: Найдено ${window.myThemes.length} тем для добавления.`);
+            window.myThemes.forEach(theme => {
+                if (theme.name && theme.template) {
+                    Lampa.Template.add(theme.name, theme.template);
+                    console.log(`${PLUGIN_NAME}: Тема "${theme.name}" добавлена.`);
+                }
+            });
+            Lampa.Noty.show('Дополнительные темы загружены', {time: 1500});
+        }
+
+        console.log(`${PLUGIN_NAME} v${PLUGIN_VERSION}: Инициализация завершена успешно.`);
+    }
+
+    // --- ТОЧКА ВХОДА ПЛАГИНА ---
+
+    function startPlugin() {
+        Promise.all([
+            loadStyles(STYLES_URL),
+            loadScript(THEMES_URL)
+        ])
+        .then(() => {
+            console.log(`${PLUGIN_NAME}: Все зависимости успешно загружены.`);
+            initializePlugin();
+        })
+        .catch(error => {
+            console.error(`${PLUGIN_NAME}: Ошибка во время инициализации или загрузки.`, error);
+            Lampa.Noty.show(`Ошибка плагина ${PLUGIN_NAME}. Подробности в консоли.`, {time: 5000});
+        });
+    }
+
+    if (window.appready) {
+        startPlugin();
+    } else {
+        Lampa.Listener.follow('app', (e) => {
+            if (e.type === 'ready') {
+                startPlugin();
+            }
+        });
+    }
+
+})();
