@@ -1020,6 +1020,158 @@
         }
     };
 
+    // --- Модуль "Профили и экспорт/импорт" ---
+    LampaUltimate.modules.profiles = {
+        enabled: true,
+        name: 'Профили и экспорт/импорт',
+        init() {
+            LampaUltimate.settings.profiles = LampaUltimate.settings.profiles || {
+                active: 'default',
+                list: { 'default': {} }
+            };
+            // Если нет активного профиля — создаём
+            if (!LampaUltimate.settings.profiles.active) {
+                LampaUltimate.settings.profiles.active = 'default';
+            }
+            if (!LampaUltimate.settings.profiles.list[LampaUltimate.settings.profiles.active]) {
+                LampaUltimate.settings.profiles.list[LampaUltimate.settings.profiles.active] = {};
+            }
+        },
+        // Сохранить текущие настройки в профиль
+        saveProfile(name) {
+            if (!name) return;
+            LampaUltimate.settings.profiles.list[name] = {
+                settings: JSON.parse(JSON.stringify(LampaUltimate.settings)),
+                collections: JSON.parse(JSON.stringify(LampaUltimate.modules.collections.lists))
+            };
+            LampaUltimate.settings.profiles.active = name;
+            LampaUltimate.saveSettings();
+        },
+        // Загрузить профиль
+        loadProfile(name) {
+            let p = LampaUltimate.settings.profiles.list[name];
+            if (p) {
+                LampaUltimate.settings = JSON.parse(JSON.stringify(p.settings));
+                LampaUltimate.modules.collections.lists = JSON.parse(JSON.stringify(p.collections));
+                LampaUltimate.settings.profiles.active = name;
+                LampaUltimate.saveSettings();
+                location.reload();
+            }
+        },
+        // Удалить профиль
+        deleteProfile(name) {
+            if (name === 'default') return;
+            delete LampaUltimate.settings.profiles.list[name];
+            if (LampaUltimate.settings.profiles.active === name) {
+                LampaUltimate.settings.profiles.active = 'default';
+            }
+            LampaUltimate.saveSettings();
+        },
+        // Экспорт профиля (JSON)
+        exportProfile(name) {
+            let p = LampaUltimate.settings.profiles.list[name];
+            return p ? JSON.stringify(p) : '';
+        },
+        // Импорт профиля (JSON)
+        importProfile(name, json) {
+            try {
+                let data = JSON.parse(json);
+                if (typeof data === 'object') {
+                    LampaUltimate.settings.profiles.list[name] = data;
+                    LampaUltimate.saveSettings();
+                }
+            } catch(e) {}
+        },
+        // Генерация ссылки (base64)
+        exportLink(name) {
+            return 'lampa-profile://' + btoa(this.exportProfile(name));
+        },
+        // Импорт из ссылки
+        importLink(name, link) {
+            if (link.startsWith('lampa-profile://')) {
+                let json = atob(link.replace('lampa-profile://',''));
+                this.importProfile(name, json);
+            }
+        }
+    };
+
+    // --- Вкладка "Профили" в меню ---
+    const origRenderTabProfiles = LampaUltimate.renderCustomMenu;
+    LampaUltimate.renderCustomMenu = function() {
+        origRenderTabProfiles.call(this);
+        // Переопределяем рендер вкладки "Профили"
+        let tabsBar = document.getElementById('lampa-ultimate-tabs');
+        let content = document.getElementById('lampa-ultimate-content');
+        function renderTab(tabId) {
+            Array.from(tabsBar.children).forEach(btn => btn.style.borderBottom = 'none');
+            let activeBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === tabId);
+            if (activeBtn) activeBtn.style.borderBottom = '2px solid #00dbde';
+            if (tabId === 'profiles') {
+                let profs = LampaUltimate.settings.profiles.list;
+                let html = `<h3>Профили</h3><div>Текущий профиль: <b>${LampaUltimate.settings.profiles.active}</b></div><ul style="list-style:none;padding:0;">`;
+                Object.keys(profs).forEach(name => {
+                    html += `<li style="margin-bottom:8px;"><b>${name}</b> <button data-profile="${name}" class="ultimate-profile-load">Загрузить</button> <button data-profile="${name}" class="ultimate-profile-del">Удалить</button> <button data-profile="${name}" class="ultimate-profile-export">Экспорт</button> <button data-profile="${name}" class="ultimate-profile-import">Импорт</button> <button data-profile="${name}" class="ultimate-profile-share">Поделиться</button></li>`;
+                });
+                html += '</ul>';
+                html += `<button id="ultimate-profile-add">Создать профиль</button>`;
+                content.innerHTML = html;
+                // Загрузить профиль
+                content.querySelectorAll('.ultimate-profile-load').forEach(btn => {
+                    btn.onclick = function() {
+                        let name = btn.dataset.profile;
+                        if (confirm('Переключиться на профиль ' + name + '?')) {
+                            LampaUltimate.modules.profiles.loadProfile(name);
+                        }
+                    };
+                });
+                // Удалить профиль
+                content.querySelectorAll('.ultimate-profile-del').forEach(btn => {
+                    btn.onclick = function() {
+                        let name = btn.dataset.profile;
+                        if (confirm('Удалить профиль ' + name + '?')) {
+                            LampaUltimate.modules.profiles.deleteProfile(name);
+                            renderTab('profiles');
+                        }
+                    };
+                });
+                // Экспорт
+                content.querySelectorAll('.ultimate-profile-export').forEach(btn => {
+                    btn.onclick = function() {
+                        let name = btn.dataset.profile;
+                        prompt('JSON для экспорта:', LampaUltimate.modules.profiles.exportProfile(name));
+                    };
+                });
+                // Импорт
+                content.querySelectorAll('.ultimate-profile-import').forEach(btn => {
+                    btn.onclick = function() {
+                        let name = btn.dataset.profile;
+                        let json = prompt('Вставьте JSON для импорта:');
+                        if (json) {
+                            LampaUltimate.modules.profiles.importProfile(name, json);
+                            renderTab('profiles');
+                        }
+                    };
+                });
+                // Поделиться (генерация ссылки)
+                content.querySelectorAll('.ultimate-profile-share').forEach(btn => {
+                    btn.onclick = function() {
+                        let name = btn.dataset.profile;
+                        prompt('Ссылка для импорта профиля:', LampaUltimate.modules.profiles.exportLink(name));
+                    };
+                });
+                // Создать профиль
+                let addBtn = content.querySelector('#ultimate-profile-add');
+                if (addBtn) addBtn.onclick = function() {
+                    let name = prompt('Название нового профиля:');
+                    if (name && !LampaUltimate.settings.profiles.list[name]) {
+                        LampaUltimate.modules.profiles.saveProfile(name);
+                        renderTab('profiles');
+                    }
+                };
+            }
+        }
+    };
+
     // Пример заглушки модуля (реализовать каждый модуль отдельно)
     LampaUltimate.registerModule('badges', {
         enabled: true,
