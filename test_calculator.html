@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест калькулятора для Lampa</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background 0.2s ease;
+        }
+        
+        .test-button:hover {
+            background: #0056b3;
+        }
+        
+        .info {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .feature-list {
+            text-align: left;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .feature-list li {
+            margin: 10px 0;
+        }
+        
+        /* CSS переменные для совместимости с Lampa */
+        :root {
+            --color-background: #1a1a1a;
+            --color-border: #333;
+            --color-text: #fff;
+            --color-text-secondary: #aaa;
+            --color-input-background: #2a2a2a;
+            --color-button-background: #3a3a3a;
+            --color-button-hover: #4a4a4a;
+            --color-accent: #007bff;
+            --color-accent-hover: #0056b3;
+            --color-success: #28a745;
+            --color-success-hover: #1e7e34;
+            --color-danger: #dc3545;
+            --color-danger-hover: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Калькулятор для Lampa</h1>
+        <p>Полнофункциональный калькулятор-плагин для медиаплеера Lampa</p>
+        
+        <button class="test-button" onclick="openCalculator()">Открыть калькулятор</button>
+        
+        <div class="info">
+            <h2>Возможности калькулятора:</h2>
+            <div class="feature-list">
+                <ul>
+                    <li><strong>Базовые операции:</strong> сложение, вычитание, умножение, деление</li>
+                    <li><strong>Поддержка клавиатуры:</strong> все операции доступны с клавиатуры</li>
+                    <li><strong>История вычислений:</strong> сохраняет последние 50 операций</li>
+                    <li><strong>Звуковые эффекты:</strong> опциональные звуки при нажатии кнопок</li>
+                    <li><strong>Красивый интерфейс:</strong> адаптивный дизайн в стиле Lampa</li>
+                    <li><strong>Анимации:</strong> плавные переходы и эффекты</li>
+                    <li><strong>Сохранение настроек:</strong> все настройки сохраняются в localStorage</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="info">
+            <h2>Горячие клавиши:</h2>
+            <div class="feature-list">
+                <ul>
+                    <li><strong>0-9:</strong> ввод цифр</li>
+                    <li><strong>+ - * /:</strong> математические операции</li>
+                    <li><strong>Enter или =:</strong> вычислить результат</li>
+                    <li><strong>Escape:</strong> закрыть калькулятор</li>
+                    <li><strong>Backspace:</strong> очистить текущий ввод (CE)</li>
+                    <li><strong>Delete:</strong> полная очистка (C)</li>
+                    <li><strong>.:</strong> десятичная точка</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="info">
+            <h2>Установка в Lampa:</h2>
+            <p>1. Скопируйте файл <code>calculator.js</code> в папку с плагинами Lampa</p>
+            <p>2. Добавьте плагин в настройках Lampa</p>
+            <p>3. Перезапустите Lampa</p>
+            <p>4. Калькулятор появится в разделе "Настройки"</p>
+        </div>
+    </div>
+
+    <!-- Подключаем наш калькулятор -->
+    <script src="calculator.js"></script>
+    
+    <!-- Эмуляция Lampa API для тестирования -->
+    <script>
+        // Простая эмуляция Lampa API для тестирования
+        window.Lampa = {
+            SettingsApi: {
+                addComponent: function(config) {
+                    console.log('Добавлен компонент:', config.name);
+                },
+                addParam: function(config) {
+                    console.log('Добавлен параметр:', config.field.name);
+                }
+            }
+        };
+        
+        function openCalculator() {
+            if (window.Calculator) {
+                Calculator.open();
+            } else {
+                alert('Ошибка: Калькулятор не загружен');
+            }
+        }
+        
+        // Информация о загрузке
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (window.Calculator) {
+                    console.log('✅ Калькулятор успешно загружен');
+                    console.log('Версия:', Calculator.version);
+                } else {
+                    console.error('❌ Ошибка загрузки калькулятора');
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>
