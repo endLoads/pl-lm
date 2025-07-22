@@ -1619,8 +1619,60 @@ Lampa Ultimate Modular Plugin
         }
     };
 
-    // Автоинициализация при загрузке
-    setTimeout(() => LampaUltimate.init(), 1000);
+    // --- Интеграция с настройками Lampa (как у Bywolf88) ---
+    function addUltimateSettingsComponent() {
+        Lampa.SettingsApi.addComponent({
+            component: 'lampa_ultimate',
+            name: 'Ultimate Modular',
+            icon: '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#00dbde"/><text x="12" y="17" text-anchor="middle" font-size="10" fill="#fff">ULT</text></svg>'
+        });
+        // Кнопка для открытия кастомного меню
+        Lampa.SettingsApi.addParam({
+            component: 'lampa_ultimate',
+            param: { type: 'button', component: 'open_menu' },
+            field: { name: 'Открыть меню Ultimate', description: 'Настройте интерфейс, модули, профили и внешний вид' },
+            onChange: () => {
+                if (LampaUltimate.renderCustomMenu) LampaUltimate.renderCustomMenu();
+            }
+        });
+        // Пример параметра: включение/выключение бейджей
+        Lampa.SettingsApi.addParam({
+            component: 'lampa_ultimate',
+            param: { name: 'badges_enabled', type: 'trigger', default: true },
+            field: { name: 'Бейджи качества и серий', description: 'Показывать бейджи на карточках' },
+            onChange: (val) => {
+                if (LampaUltimate.modules.badges) {
+                    LampaUltimate.modules.badges.enabled = val;
+                    LampaUltimate.settings.badges = LampaUltimate.settings.badges || {};
+                    LampaUltimate.settings.badges.enabled = val;
+                    LampaUltimate.saveSettings();
+                }
+            }
+        });
+        // Пример параметра: включение/выключение логотипов
+        Lampa.SettingsApi.addParam({
+            component: 'lampa_ultimate',
+            param: { name: 'logos_enabled', type: 'trigger', default: true },
+            field: { name: 'Оригинальные логотипы', description: 'Показывать оригинальные логотипы на карточках' },
+            onChange: (val) => {
+                if (LampaUltimate.modules.logos) {
+                    LampaUltimate.modules.logos.enabled = val;
+                    LampaUltimate.settings.logos = LampaUltimate.settings.logos || {};
+                    LampaUltimate.settings.logos.enabled = val;
+                    LampaUltimate.saveSettings();
+                }
+            }
+        });
+        // Можно добавить другие параметры по аналогии (VPN, фильтры, коллекции и т.д.)
+    }
+
+    // --- Автоинициализация вкладки в настройках ---
+    setTimeout(() => {
+        if (window.Lampa && Lampa.SettingsApi) {
+            addUltimateSettingsComponent();
+        }
+        if (LampaUltimate.init) LampaUltimate.init();
+    }, 1000);
 
     // Экспорт для отладки
     window.LampaUltimate = LampaUltimate;
