@@ -311,6 +311,84 @@
         }
     });
 
+    // --- Модуль "Оригинальные логотипы" ---
+    LampaUltimate.modules.logos = Object.assign(LampaUltimate.modules.logos, {
+        style: 'color', // color | mono | outline
+        fallback: 'poster', // poster | title
+        cache: {},
+        init() {
+            LampaUltimate.settings.logos = LampaUltimate.settings.logos || {
+                style: 'color',
+                fallback: 'poster'
+            };
+            this.style = LampaUltimate.settings.logos.style;
+            this.fallback = LampaUltimate.settings.logos.fallback;
+            this.cache = {};
+
+            // Патчим рендер карточек для логотипов
+            const origRender = window.Lampa && Lampa.Card && Lampa.Card.render;
+            if (origRender && !Lampa.Card._ultimateLogoPatched) {
+                Lampa.Card.render = function(cardData, ...args) {
+                    let el = origRender.call(this, cardData, ...args);
+                    setTimeout(() => {
+                        try {
+                            if (!el) return;
+                            // Удаляем старые лого
+                            el.querySelectorAll('.ultimate-logo').forEach(b => b.remove());
+                            // Получаем путь к лого
+                            let logoUrl = '';
+                            if (cardData.logo_path) {
+                                logoUrl = getLogoUrl(cardData.logo_path);
+                            } else if (cardData.logos && cardData.logos.length) {
+                                logoUrl = getLogoUrl(cardData.logos[0]);
+                            }
+                            // Если есть лого — показываем
+                            if (LampaUltimate.modules.logos.enabled && logoUrl) {
+                                let img = document.createElement('img');
+                                img.className = 'ultimate-logo';
+                                img.src = logoUrl;
+                                img.alt = 'logo';
+                                img.style = logoStyle(LampaUltimate.settings.logos.style);
+                                img.onload = () => img.style.opacity = 1;
+                                img.onerror = () => img.remove();
+                                el.appendChild(img);
+                                LampaUltimate.modules.logos.cache[logoUrl] = true;
+                            } else if (LampaUltimate.modules.logos.enabled) {
+                                // Fallback: постер или название
+                                if (LampaUltimate.settings.logos.fallback === 'poster' && cardData.poster_path) {
+                                    // Уже есть постер — ничего не делаем
+                                } else if (LampaUltimate.settings.logos.fallback === 'title' && cardData.title) {
+                                    let div = document.createElement('div');
+                                    div.className = 'ultimate-logo';
+                                    div.textContent = cardData.title;
+                                    div.style = logoStyle(LampaUltimate.settings.logos.style) + 'font-size:1.2em;font-weight:bold;letter-spacing:1px;';
+                                    el.appendChild(div);
+                                }
+                            }
+                        } catch(e) {}
+                    }, 0);
+                    return el;
+                };
+                Lampa.Card._ultimateLogoPatched = true;
+            }
+            // Вспомогательная функция для url
+            function getLogoUrl(path) {
+                if (!path) return '';
+                if (/^https?:/.test(path)) return path;
+                // TMDB CDN
+                return 'https://image.tmdb.org/t/p/original' + path;
+            }
+            // Вспомогательная функция для стиля
+            function logoStyle(style) {
+                let base = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;max-height:40%;opacity:0.95;z-index:12;pointer-events:none;transition:opacity 0.2s;';
+                if (style === 'color') return base + '';
+                if (style === 'mono') return base + 'filter: grayscale(1) contrast(1.5);';
+                if (style === 'outline') return base + 'filter: grayscale(1) brightness(2) drop-shadow(0 0 2px #fff);';
+                return base;
+            }
+        }
+    });
+
     // --- Добавляем настройки бейджей в меню ---
     const origRenderTab = LampaUltimate.renderCustomMenu;
     LampaUltimate.renderCustomMenu = function() {
@@ -349,6 +427,23 @@
                             </label>
                         </div>`;
                     }
+                    if (key === 'logos') {
+                        html += `<div style="margin-left:30px;margin-top:5px;">
+                            <label>Стиль логотипа:
+                                <select id="logos-style">
+                                    <option value="color" ${LampaUltimate.settings.logos.style==='color'?'selected':''}>Цветной</option>
+                                    <option value="mono" ${LampaUltimate.settings.logos.style==='mono'?'selected':''}>Монохром</option>
+                                    <option value="outline" ${LampaUltimate.settings.logos.style==='outline'?'selected':''}>Outline</option>
+                                </select>
+                            </label>
+                            <label style="margin-left:20px;">Fallback:
+                                <select id="logos-fallback">
+                                    <option value="poster" ${LampaUltimate.settings.logos.fallback==='poster'?'selected':''}>Постер</option>
+                                    <option value="title" ${LampaUltimate.settings.logos.fallback==='title'?'selected':''}>Название</option>
+                                </select>
+                            </label>
+                        </div>`;
+                    }
                     html += '</li>';
                 });
                 html += '</ul>';
@@ -372,6 +467,19 @@
                 if (showSel) showSel.onchange = function() {
                     LampaUltimate.settings.badges.show = showSel.value;
                     LampaUltimate.modules.badges.show = showSel.value;
+                    LampaUltimate.saveSettings();
+                };
+                // Настройки логотипов
+                let logoStyleSel = content.querySelector('#logos-style');
+                let logoFallbackSel = content.querySelector('#logos-fallback');
+                if (logoStyleSel) logoStyleSel.onchange = function() {
+                    LampaUltimate.settings.logos.style = logoStyleSel.value;
+                    LampaUltimate.modules.logos.style = logoStyleSel.value;
+                    LampaUltimate.saveSettings();
+                };
+                if (logoFallbackSel) logoFallbackSel.onchange = function() {
+                    LampaUltimate.settings.logos.fallback = logoFallbackSel.value;
+                    LampaUltimate.modules.logos.fallback = logoFallbackSel.value;
                     LampaUltimate.saveSettings();
                 };
             };
