@@ -290,29 +290,24 @@ Lampa Ultimate Modular Plugin
     };
 
     // --- Модуль "Бейджи качества и серий" ---
-    LampaUltimate.modules.badges = Object.assign(LampaUltimate.modules.badges || {}, {
+    LampaUltimate.modules.badges = {
+        enabled: true,
         style: 'color', // color | minimal | icon
         show: 'both',   // quality | episodes | both | none
         init() {
-            // Добавляем настройки во вкладки
-            LampaUltimate.settings.badges = LampaUltimate.settings.badges || {
-                style: 'color',
-                show: 'both'
-            };
+            LampaUltimate.settings.badges = LampaUltimate.settings.badges || { enabled: true, style: 'color', show: 'both' };
+            this.enabled = LampaUltimate.settings.badges.enabled;
             this.style = LampaUltimate.settings.badges.style;
             this.show = LampaUltimate.settings.badges.show;
-
-            // Патчим рендер карточек Lampa (универсально для всех источников)
+            // Патчим рендер карточек для всех источников
             const origRender = window.Lampa && Lampa.Card && Lampa.Card.render;
-            if (origRender && !Lampa.Card._ultimatePatched) {
+            if (origRender && !Lampa.Card._ultimateBadgesPatched) {
                 Lampa.Card.render = function(cardData, ...args) {
                     let el = origRender.call(this, cardData, ...args);
                     setTimeout(() => {
                         try {
                             if (!el) return;
-                            // Удаляем старые бейджи
                             el.querySelectorAll('.ultimate-badge').forEach(b => b.remove());
-                            // Получаем качество и серии
                             let quality = cardData.quality || cardData.Quality || '';
                             let episodes = '';
                             if (cardData.number_of_episodes && cardData.number_of_seasons) {
@@ -320,19 +315,18 @@ Lampa Ultimate Modular Plugin
                             } else if (cardData.episodes) {
                                 episodes = cardData.episodes;
                             }
-                            // Показываем бейджи по настройкам
-                            if (LampaUltimate.modules.badges.enabled && LampaUltimate.settings.badges.show !== 'none') {
-                                if ((LampaUltimate.settings.badges.show === 'quality' || LampaUltimate.settings.badges.show === 'both') && quality) {
+                            if (LampaUltimate.modules.badges.enabled && LampaUltimate.modules.badges.show !== 'none') {
+                                if ((LampaUltimate.modules.badges.show === 'quality' || LampaUltimate.modules.badges.show === 'both') && quality) {
                                     let badge = document.createElement('div');
                                     badge.className = 'ultimate-badge ultimate-badge-quality';
-                                    badge.style = badgeStyle(LampaUltimate.settings.badges.style, 'quality');
+                                    badge.style = badgeStyle(LampaUltimate.modules.badges.style, 'quality');
                                     badge.textContent = quality;
                                     el.appendChild(badge);
                                 }
-                                if ((LampaUltimate.settings.badges.show === 'episodes' || LampaUltimate.settings.badges.show === 'both') && episodes) {
+                                if ((LampaUltimate.modules.badges.show === 'episodes' || LampaUltimate.modules.badges.show === 'both') && episodes) {
                                     let badge = document.createElement('div');
                                     badge.className = 'ultimate-badge ultimate-badge-episodes';
-                                    badge.style = badgeStyle(LampaUltimate.settings.badges.style, 'episodes');
+                                    badge.style = badgeStyle(LampaUltimate.modules.badges.style, 'episodes');
                                     badge.textContent = episodes;
                                     el.appendChild(badge);
                                 }
@@ -341,9 +335,8 @@ Lampa Ultimate Modular Plugin
                     }, 0);
                     return el;
                 };
-                Lampa.Card._ultimatePatched = true;
+                Lampa.Card._ultimateBadgesPatched = true;
             }
-            // Вспомогательная функция для стиля бейджа
             function badgeStyle(style, type) {
                 if (style === 'color') {
                     return `position:absolute;top:${type==='quality'?8:36}px;right:8px;background:linear-gradient(90deg,#00dbde,#fc00ff);color:#fff;padding:2px 8px;border-radius:8px;font-size:1em;font-weight:bold;z-index:10;`;
@@ -355,22 +348,20 @@ Lampa Ultimate Modular Plugin
                 return '';
             }
         }
-    });
+    };
 
     // --- Модуль "Оригинальные логотипы" ---
-    LampaUltimate.modules.logos = Object.assign(LampaUltimate.modules.logos || {}, {
+    LampaUltimate.modules.logos = {
+        enabled: true,
         style: 'color', // color | mono | outline
         fallback: 'poster', // poster | title
         cache: {},
         init() {
-            LampaUltimate.settings.logos = LampaUltimate.settings.logos || {
-                style: 'color',
-                fallback: 'poster'
-            };
+            LampaUltimate.settings.logos = LampaUltimate.settings.logos || { enabled: true, style: 'color', fallback: 'poster' };
+            this.enabled = LampaUltimate.settings.logos.enabled;
             this.style = LampaUltimate.settings.logos.style;
             this.fallback = LampaUltimate.settings.logos.fallback;
             this.cache = {};
-
             // Патчим рендер карточек для логотипов
             const origRender = window.Lampa && Lampa.Card && Lampa.Card.render;
             if (origRender && !Lampa.Card._ultimateLogoPatched) {
@@ -379,35 +370,31 @@ Lampa Ultimate Modular Plugin
                     setTimeout(() => {
                         try {
                             if (!el) return;
-                            // Удаляем старые лого
                             el.querySelectorAll('.ultimate-logo').forEach(b => b.remove());
-                            // Получаем путь к лого
                             let logoUrl = '';
                             if (cardData.logo_path) {
                                 logoUrl = getLogoUrl(cardData.logo_path);
                             } else if (cardData.logos && cardData.logos.length) {
                                 logoUrl = getLogoUrl(cardData.logos[0]);
                             }
-                            // Если есть лого — показываем
                             if (LampaUltimate.modules.logos.enabled && logoUrl) {
                                 let img = document.createElement('img');
                                 img.className = 'ultimate-logo';
                                 img.src = logoUrl;
                                 img.alt = 'logo';
-                                img.style = logoStyle(LampaUltimate.settings.logos.style);
+                                img.style = logoStyle(LampaUltimate.modules.logos.style);
                                 img.onload = () => img.style.opacity = 1;
                                 img.onerror = () => img.remove();
                                 el.appendChild(img);
                                 LampaUltimate.modules.logos.cache[logoUrl] = true;
                             } else if (LampaUltimate.modules.logos.enabled) {
-                                // Fallback: постер или название
-                                if (LampaUltimate.settings.logos.fallback === 'poster' && cardData.poster_path) {
+                                if (LampaUltimate.modules.logos.fallback === 'poster' && cardData.poster_path) {
                                     // Уже есть постер — ничего не делаем
-                                } else if (LampaUltimate.settings.logos.fallback === 'title' && cardData.title) {
+                                } else if (LampaUltimate.modules.logos.fallback === 'title' && cardData.title) {
                                     let div = document.createElement('div');
                                     div.className = 'ultimate-logo';
                                     div.textContent = cardData.title;
-                                    div.style = logoStyle(LampaUltimate.settings.logos.style) + 'font-size:1.2em;font-weight:bold;letter-spacing:1px;';
+                                    div.style = logoStyle(LampaUltimate.modules.logos.style) + 'font-size:1.2em;font-weight:bold;letter-spacing:1px;';
                                     el.appendChild(div);
                                 }
                             }
@@ -417,14 +404,11 @@ Lampa Ultimate Modular Plugin
                 };
                 Lampa.Card._ultimateLogoPatched = true;
             }
-            // Вспомогательная функция для url
             function getLogoUrl(path) {
                 if (!path) return '';
                 if (/^https?:/.test(path)) return path;
-                // TMDB CDN
                 return 'https://image.tmdb.org/t/p/original' + path;
             }
-            // Вспомогательная функция для стиля
             function logoStyle(style) {
                 let base = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;max-height:40%;opacity:0.95;z-index:12;pointer-events:none;transition:opacity 0.2s;';
                 if (style === 'color') return base + '';
@@ -433,7 +417,7 @@ Lampa Ultimate Modular Plugin
                 return base;
             }
         }
-    });
+    };
 
     // --- Модуль "VPN Checker" ---
     LampaUltimate.modules.vpn = Object.assign(LampaUltimate.modules.vpn || {}, {
@@ -573,18 +557,14 @@ Lampa Ultimate Modular Plugin
             if (!res || !res.status) return 'Нет данных';
             return `IP: ${res.ip||'-'}\nСтрана: ${res.country||'-'}\nГород: ${res.city||'-'}\nПровайдер: ${res.org||'-'}\nASN: ${res.asn||'-'}\nVPN/Proxy/TOR: ${res.status==='vpn'?'ДА':'нет'}\n\n${res.details?JSON.stringify(res.details,null,2):''}`;
         }
-    });
+    };
 
     // --- Модуль "Скрытие просмотренных" и быстрые фильтры ---
     LampaUltimate.modules.hideWatched = {
         enabled: false,
         onlyNew: false,
-        name: 'Скрытие просмотренных',
         init() {
-            LampaUltimate.settings.hideWatched = LampaUltimate.settings.hideWatched || {
-                enabled: false,
-                onlyNew: false
-            };
+            LampaUltimate.settings.hideWatched = LampaUltimate.settings.hideWatched || { enabled: false, onlyNew: false };
             this.enabled = LampaUltimate.settings.hideWatched.enabled;
             this.onlyNew = LampaUltimate.settings.hideWatched.onlyNew;
             // Патчим рендер списков
@@ -614,23 +594,16 @@ Lampa Ultimate Modular Plugin
                         LampaUltimate.settings.hideWatched.onlyNew = LampaUltimate.modules.hideWatched.onlyNew;
                         btn.textContent = LampaUltimate.modules.hideWatched.onlyNew ? 'Показать все' : 'Только новые';
                         LampaUltimate.saveSettings();
-                        // Перерисовать списки
-                        if (window.Lampa && Lampa.List && Lampa.List.render) {
-                            // Триггерим обновление (можно оптимизировать)
-                            let ev = new Event('ultimate-filter-update');
-                            document.dispatchEvent(ev);
-                        }
+                        let ev = new Event('ultimate-filter-update');
+                        document.dispatchEvent(ev);
                     };
                     document.body.appendChild(btn);
                 }
             }, 1000);
-            // Вспомогательные функции
             function isWatched(card) {
-                // Универсальная проверка (можно доработать под вашу структуру)
                 return card.watched === true || card.is_watched === true || card.progress === 1 || card.seen === true;
             }
             function isNew(card) {
-                // Новое — если не просмотрено и дата релиза не старше 30 дней
                 if (isWatched(card)) return false;
                 if (card.release_date) {
                     let d = new Date(card.release_date);
