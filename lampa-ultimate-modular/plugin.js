@@ -29,6 +29,29 @@
     }
 
     function initializePlugin() {
+        Lampa.Activity.add('ultimate_modular', {
+    create: function() {
+        const activity = document.createElement('div');
+        activity.innerHTML = `
+            <div class="activity-head">
+                <div class="activity-title">${PLUGIN_NAME}</div>
+            </div>
+            <div class="activity-body">
+                <div class="settings-folder">
+                    <div class="settings-folder__title">О плагине</div>
+                    <div class="settings-folder__content">
+                        <div style="padding: 1em;">
+                            <div><strong>Версия:</strong> ${PLUGIN_VERSION}</div>
+                            <div><strong>Автор:</strong> endLoads</div>
+                            <div><strong>Статус:</strong> <span style="color: #4CAF50;">Активен</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        return activity;
+    }
+});
         console.log(`${PLUGIN_NAME}: Инициализация...`);
         
         window.lampa_ultimate_modular = true;
