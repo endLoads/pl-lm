@@ -420,21 +420,17 @@ Lampa Ultimate Modular Plugin
     };
 
     // --- Модуль "VPN Checker" ---
-    LampaUltimate.modules.vpn = Object.assign(LampaUltimate.modules.vpn || {}, {
-        mode: 'detailed', // detailed | short
+    LampaUltimate.modules.vpn = {
         enabled: false,
+        mode: 'detailed', // detailed | short
         lastResult: null,
         lastCheck: 0,
         cacheTtl: 10 * 60 * 1000, // 10 минут
         indicator: null,
         init() {
-            LampaUltimate.settings.vpn = LampaUltimate.settings.vpn || {
-                enabled: false,
-                mode: 'detailed'
-            };
+            LampaUltimate.settings.vpn = LampaUltimate.settings.vpn || { enabled: false, mode: 'detailed' };
             this.enabled = LampaUltimate.settings.vpn.enabled;
             this.mode = LampaUltimate.settings.vpn.mode;
-            // Если включено — запускаем проверку
             if (this.enabled) this.checkAndRender();
         },
         checkAndRender(force) {
@@ -454,7 +450,6 @@ Lampa Ultimate Modular Plugin
             });
         },
         async checkVPN() {
-            // Пробуем несколько API по очереди
             let apis = [
                 async () => {
                     let r = await fetch('https://ip-api.io/json/');
@@ -526,7 +521,6 @@ Lampa Ultimate Modular Plugin
             }
             ind.innerHTML = `<span style="font-size:1.5em;">${icon}</span><span>${this.mode==='detailed'?this.statusText(res):this.shortText(res)}</span>`;
             ind.style.border = `2px solid ${color}`;
-            // Клик — показать подробности
             ind.onclick = () => {
                 if (this.mode === 'detailed' && res.status && res.status !== 'loading') {
                     alert(this.detailedInfo(res));
@@ -558,6 +552,11 @@ Lampa Ultimate Modular Plugin
             return `IP: ${res.ip||'-'}\nСтрана: ${res.country||'-'}\nГород: ${res.city||'-'}\nПровайдер: ${res.org||'-'}\nASN: ${res.asn||'-'}\nVPN/Proxy/TOR: ${res.status==='vpn'?'ДА':'нет'}\n\n${res.details?JSON.stringify(res.details,null,2):''}`;
         }
     };
+
+    // --- Инициализация VPN Checker ---
+    setTimeout(() => {
+        if (LampaUltimate.modules.vpn && LampaUltimate.modules.vpn.init) LampaUltimate.modules.vpn.init();
+    }, 1500);
 
     // --- Модуль "Скрытие просмотренных" и быстрые фильтры ---
     LampaUltimate.modules.hideWatched = {
