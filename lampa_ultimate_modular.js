@@ -1515,10 +1515,9 @@ Lampa Ultimate Modular Plugin
         if (LampaUltimate.modules.recommendations) {/* нет init, только методы */}
     }, 1800);
 
-    // --- Модуль "Уведомления" ---
+    // === Этап 8: Уведомления и Telegram ===
     LampaUltimate.modules.notifications = {
         enabled: true,
-        name: 'Уведомления',
         reminders: [], // [{title, time, cardId}]
         addReminder(title, time, cardId) {
             this.reminders.push({title, time, cardId});
@@ -1562,13 +1561,11 @@ Lampa Ultimate Modular Plugin
         }
     };
 
-    // --- Модуль "Telegram-интеграция" ---
     LampaUltimate.modules.telegram = {
         enabled: true,
-        name: 'Telegram',
         sendMessage(msg) {
-            let token = LampaUltimate.settings.telegram.botToken;
-            let chat = LampaUltimate.settings.telegram.chatId;
+            let token = LampaUltimate.settings.telegram?.botToken;
+            let chat = LampaUltimate.settings.telegram?.chatId;
             if (!token || !chat) return;
             fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                 method: 'POST',
@@ -1576,78 +1573,72 @@ Lampa Ultimate Modular Plugin
                 body: JSON.stringify({ chat_id: chat, text: msg })
             });
         },
-        exportToTelegram(data, caption) {
-            this.sendMessage((caption||'Экспорт данных:') + '\n' + data);
-        },
-        importFromTelegram() {
-            // Можно реализовать через команду боту или ссылку
-        },
         supportLink() {
-            return LampaUltimate.settings.telegram.supportLink;
+            return LampaUltimate.settings.telegram?.supportLink || '';
         }
     };
 
-    // --- Вкладка "Рекомендации" в меню ---
-    const origRenderTabRecommendations = LampaUltimate.renderCustomMenu;
-    LampaUltimate.renderCustomMenu = function() {
-        origRenderTabRecommendations.call(this);
-        let tabsBar = document.getElementById('lampa-ultimate-tabs');
-        let content = document.getElementById('lampa-ultimate-content');
-        function renderTab(tabId) {
-            Array.from(tabsBar.children).forEach(btn => btn.style.borderBottom = 'none');
-            let activeBtn = Array.from(tabsBar.children).find(btn => btn.dataset.tab === tabId);
-            if (activeBtn) activeBtn.style.borderBottom = '2px solid #00dbde';
-            if (tabId === 'recommendations') {
-                let allCards = window.Lampa && Lampa.Data && Lampa.Data.cards ? Lampa.Data.cards : [];
-                let rec = LampaUltimate.modules.recommendations;
-                let pers = rec.getPersonalized(allCards);
-                let html = `<h3>Персональные рекомендации</h3><ul style="list-style:none;padding:0;">`;
-                pers.forEach(card => { html += `<li>${card.title||card.name||card.original_title}</li>`; });
-                html += '</ul>';
-                html += `<button id="ultimate-random-btn">Случайный фильм</button>`;
-                content.innerHTML = html;
-                let randBtn = content.querySelector('#ultimate-random-btn');
-                if (randBtn) randBtn.onclick = function() {
-                    let rnd = rec.getRandom(allCards);
-                    alert('Случайный фильм: ' + (rnd?.title||rnd?.name||rnd?.original_title||'нет'));
-                };
+    // --- UI для вкладки 'Уведомления' ---
+    LampaUltimate.renderNotificationsTab = function(content) {
+        let n = LampaUltimate.modules.notifications;
+        let html = `<h3>Уведомления и напоминания</h3><ul style="list-style:none;padding:0;">`;
+        n.reminders.forEach(rem => { html += `<li>${rem.title} (${new Date(rem.time).toLocaleString()})</li>`; });
+        html += '</ul>';
+        html += `<button id="ultimate-add-reminder">Добавить напоминание</button>`;
+        content.innerHTML = html;
+        let addBtn = content.querySelector('#ultimate-add-reminder');
+        if (addBtn) addBtn.onclick = function() {
+            let title = prompt('Текст напоминания:');
+            let time = prompt('Время (YYYY-MM-DD HH:MM):');
+            if (title && time) {
+                let t = new Date(time.replace(' ', 'T')).getTime();
+                n.addReminder(title, t);
+                alert('Напоминание добавлено!');
             }
-            if (tabId === 'notifications') {
-                let n = LampaUltimate.modules.notifications;
-                let html = `<h3>Уведомления и напоминания</h3><ul style="list-style:none;padding:0;">`;
-                n.reminders.forEach(rem => { html += `<li>${rem.title} (${new Date(rem.time).toLocaleString()})</li>`; });
-                html += '</ul>';
-                html += `<button id="ultimate-add-reminder">Добавить напоминание</button>`;
-                content.innerHTML = html;
-                let addBtn = content.querySelector('#ultimate-add-reminder');
-                if (addBtn) addBtn.onclick = function() {
-                    let title = prompt('Текст напоминания:');
-                    let time = prompt('Время (YYYY-MM-DD HH:MM):');
-                    if (title && time) {
-                        let t = new Date(time.replace(' ', 'T')).getTime();
-                        n.addReminder(title, t);
-                        alert('Напоминание добавлено!');
-                    }
-                };
-            }
-            if (tabId === 'telegram') {
-                let t = LampaUltimate.modules.telegram;
-                let html = `<h3>Интеграция с Telegram</h3>
-                <div>Бот: <b>${LampaUltimate.settings.telegram.botToken ? 'Подключен' : 'Не подключен'}</b></div>
-                <div>Чат/канал: <b>${LampaUltimate.settings.telegram.chatId||'-'}</b></div>
-                <div><a href="${t.supportLink()}" target="_blank" style="color:#00dbde;">Поддержка/Новости</a></div>
-                <button id="ultimate-tg-export">Экспорт профиля в Telegram</button>`;
-                content.innerHTML = html;
-                let expBtn = content.querySelector('#ultimate-tg-export');
-                if (expBtn) expBtn.onclick = function() {
-                    let name = LampaUltimate.settings.profiles.active;
-                    let data = LampaUltimate.modules.profiles.exportProfile(name);
-                    t.exportToTelegram(data, 'Экспорт профиля: ' + name);
-                    alert('Профиль отправлен в Telegram!');
-                };
-            }
-        }
+        };
     };
+
+    // --- UI для вкладки 'Telegram' ---
+    LampaUltimate.renderTelegramTab = function(content) {
+        let t = LampaUltimate.modules.telegram;
+        let html = `<h3>Интеграция с Telegram</h3>
+        <div>Бот: <b>${LampaUltimate.settings.telegram?.botToken ? 'Подключен' : 'Не подключен'}</b></div>
+        <div>Чат/канал: <b>${LampaUltimate.settings.telegram?.chatId||'-'}</b></div>
+        <div><a href="${t.supportLink()}" target="_blank" style="color:#00dbde;">Поддержка/Новости</a></div>
+        <button id="ultimate-tg-test">Тестовое сообщение</button>`;
+        content.innerHTML = html;
+        let testBtn = content.querySelector('#ultimate-tg-test');
+        if (testBtn) testBtn.onclick = function() {
+            t.sendMessage('Тестовое сообщение из Lampa Ultimate Modular!');
+            alert('Тестовое сообщение отправлено!');
+        };
+    };
+
+    // --- Встраиваем вкладки 'Уведомления' и 'Telegram' в меню ---
+    (function patchNotificationsAndTelegramTabs() {
+        const origRenderMenu = LampaUltimate.renderMenu;
+        LampaUltimate.renderMenu = function() {
+            origRenderMenu.call(this);
+            let tabsBar = document.getElementById('lampa-ultimate-tabs');
+            let content = document.getElementById('lampa-ultimate-content');
+            if (!tabsBar || !content) return;
+            let origRenderTab = content.renderTab || function(tabId){};
+            content.renderTab = function(tabId) {
+                if (tabId === 'notifications') {
+                    LampaUltimate.renderNotificationsTab(content);
+                } else if (tabId === 'telegram') {
+                    LampaUltimate.renderTelegramTab(content);
+                } else {
+                    origRenderTab(tabId);
+                }
+            };
+        };
+    })();
+
+    // --- Инициализация уведомлений и Telegram ---
+    setTimeout(() => {
+        if (LampaUltimate.modules.notifications && LampaUltimate.modules.notifications.init) LampaUltimate.modules.notifications.init();
+    }, 1900);
 
     // --- Интеграция с настройками Lampa (как у Bywolf88) ---
     function addUltimateSettingsComponent() {
