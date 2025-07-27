@@ -5,8 +5,8 @@
 
     // Деобфуциированный код меню
     function initMenu() {
-        // Проверка доступа к Lampa
-        if (Lampa.Manifest.get('origin').includes !== 'lampa') {
+        // Проверка доступа к Lampa - исправленная версия
+        if (Lampa.Manifest.get('origin') !== 'bylampa') {
             Lampa.Noty.create('Ошибка доступа');
             return;
         }
@@ -110,7 +110,7 @@
             }
         });
 
-        Lampa.SettingsApi.addParam({
+        Lampa.Settings.addParam({
             'component': 'back_menu',
             'param': {
                 'name': 'clear_cache',
@@ -127,7 +127,7 @@
             }
         });
 
-        Lampa.SettingsApi.addParam({
+        Lampa.Settings.addParam({
             'component': 'back_menu',
             'param': {
                 'name': 'youtube',
