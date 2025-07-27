@@ -1,14 +1,32 @@
 (function() {
     'use strict';
 
-    console.log('[menu.js] Скрипт загружен');
-    Lampa.Platform.tv();
-    console.log('[menu.js] После Lampa.Platform.tv()');
+    // Универсальный логгер (работает даже если console отключён)
+    function safeLog() {
+        try { if (window.console && console.log) console.log.apply(console, arguments); } catch(e) {}
+    }
 
-    // Деобфуциированный код меню
+    safeLog('[menu.js] Скрипт загружен');
+    if (window.Lampa && Lampa.Platform && Lampa.Platform.tv) {
+        Lampa.Platform.tv();
+        safeLog('[menu.js] После Lampa.Platform.tv()');
+    }
+
+    // Универсальный addParam (SettingsApi или Settings)
+    function addParamUniversal(param) {
+        if (window.Lampa) {
+            if (Lampa.SettingsApi && typeof Lampa.SettingsApi.addParam === 'function') {
+                Lampa.SettingsApi.addParam(param);
+            } else if (Lampa.Settings && typeof Lampa.Settings.addParam === 'function') {
+                Lampa.Settings.addParam(param);
+            } else {
+                safeLog('[menu.js] Нет подходящего метода addParam');
+            }
+        }
+    }
+
     function initMenu() {
-        console.log('[menu.js] Вызван initMenu');
-        // Проверка доступа убрана для универсальности
+        safeLog('[menu.js] Вызван initMenu');
 
         // Константы для пунктов меню
         const EXIT_MENU = 'Выход ';
@@ -23,23 +41,29 @@
         const SPEED_TEST = 'Speed Test';
 
         // Настройки хранилища
-        console.log('[menu.js] Lampa.Storage.listener.follow');
-        Lampa.Storage.listener.follow('change', function() {});
+        if (Lampa.Storage && Lampa.Storage.listener && Lampa.Storage.listener.follow) {
+            safeLog('[menu.js] Lampa.Storage.listener.follow');
+            Lampa.Storage.listener.follow('change', function() {});
+        }
 
         // Обработчик настроек
-        console.log('[menu.js] Lampa.Settings.listener.follow');
-        Lampa.Settings.listener.follow('back_menu', function(event) {
-            if (event.name == 'back_menu') {
-                Lampa.Settings.create({'component': 'BackMenu', 'name': 'BackMenu'});
-                setTimeout(function() {
-                    $('div[data-component="back_menu"]').remove();
-                }, 0);
-            }
-        });
+        if (Lampa.Settings && Lampa.Settings.listener && Lampa.Settings.listener.follow) {
+            safeLog('[menu.js] Lampa.Settings.listener.follow');
+            Lampa.Settings.listener.follow('back_menu', function(event) {
+                if (event.name == 'back_menu' && Lampa.Settings && Lampa.Settings.create) {
+                    Lampa.Settings.create({'component': 'BackMenu', 'name': 'BackMenu'});
+                    setTimeout(function() {
+                        if (window.$) {
+                            $('div[data-component="back_menu"]').remove();
+                        }
+                    }, 0);
+                }
+            });
+        }
 
         // Добавление параметров настроек
-        console.log('[menu.js] Lampa.Settings.addParam (back_menu)');
-        Lampa.Settings.addParam({
+        safeLog('[menu.js] addParamUniversal (back_menu)');
+        addParamUniversal({
             'component': 'back_menu',
             'param': {
                 'name': 'back_menu',
@@ -51,172 +75,48 @@
                 'description': 'Настройки отображения пунктов меню'
             },
             'onRender': function(field) {
-                field.on('hover:enter', function() {
-                    Lampa.Settings.create('back_menu');
-                    Lampa.Controller.toggle().name.back = function() {
-                        Lampa.Settings.hide('back_menu');
-                    };
-                });
+                if (field && field.on && Lampa.Settings && Lampa.Settings.create && Lampa.Controller && Lampa.Controller.toggle) {
+                    field.on('hover:enter', function() {
+                        Lampa.Settings.create('back_menu');
+                        var ctrl = Lampa.Controller.toggle();
+                        if (ctrl && ctrl.name) ctrl.name.back = function() {
+                            if (Lampa.Settings && Lampa.Settings.hide) Lampa.Settings.hide('back_menu');
+                        };
+                    });
+                }
             }
         });
 
-        // Добавление остальных параметров настроек
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'exit',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
+        // Универсальная функция для добавления пунктов меню
+        function addMenuParam(name, title, def) {
+            addParamUniversal({
+                'component': 'back_menu',
+                'param': {
+                    'name': name,
+                    'type': 'select',
+                    'values': { 1: 'Скрыть', 2: 'Отобразить' },
+                    'default': def
                 },
-                'default': '2'
-            },
-            'field': {
-                'name': 'Закрыть приложение',
-                'description': 'Нажмите для выбора'
-            }
-        });
-
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'reboot',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
-                },
-                'default': '2'
-            },
-            'field': {
-                'name': 'Перезагрузить',
-                'description': 'Нажмите для выбора'
-            }
-        });
-
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'switch_server',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
-                },
-                'default': '2'
-            },
-            'field': {
-                'name': 'Сменить сервер',
-                'description': 'Нажмите для выбора'
-            }
-        });
-
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'clear_cache',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
-                },
-                'default': '2'
-            },
-            'field': {
-                'name': 'Очистить кэш',
-                'description': 'Нажмите для выбора'
-            }
-        });
-
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'youtube',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
-                },
-                'default': '1'
-            },
-            'field': {
-                'name': 'YouTube',
-                'description': 'Нажмите для выбора'
-            }
-        });
-
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'rutube',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
-                },
-                'default': '1'
-            },
-            'field': {
-                'name': 'RuTube',
-                'description': 'Нажмите для выбора'
-            }
-        });
-
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'drm_play',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
-                },
-                'default': '1'
-            },
-            'field': {
-                'name': 'DRM Play',
-                'description': 'Нажмите для выбора'
-            }
-        });
-
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'twitch',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
-                },
-                'default': '1'
-            },
-            'field': {
-                'name': 'Twitch',
-                'description': 'Нажмите для выбора'
-            }
-        });
-
-        Lampa.Settings.addParam({
-            'component': 'back_menu',
-            'param': {
-                'name': 'speedtest',
-                'type': 'select',
-                'values': {
-                    1: 'Скрыть',
-                    2: 'Отобразить'
-                },
-                'default': '1'
-            },
-            'field': {
-                'name': 'Speed Test',
-                'description': 'Нажмите для выбора'
-            }
-        });
+                'field': {
+                    'name': title,
+                    'description': 'Нажмите для выбора'
+                }
+            });
+        }
+        addMenuParam('exit', 'Закрыть приложение', '2');
+        addMenuParam('reboot', 'Перезагрузить', '2');
+        addMenuParam('switch_server', 'Сменить сервер', '2');
+        addMenuParam('clear_cache', 'Очистить кэш', '2');
+        addMenuParam('youtube', 'YouTube', '1');
+        addMenuParam('rutube', 'RuTube', '1');
+        addMenuParam('drm_play', 'DRM Play', '1');
+        addMenuParam('twitch', 'Twitch', '1');
+        addMenuParam('fork_player', 'ForkPlayer', '1');
+        addMenuParam('speedtest', 'Speed Test', '1');
 
         // Инициализация при готовности Lampa
         var initInterval = setInterval(function() {
-            if (typeof Lampa !== 'undefined') {
+            if (typeof Lampa !== 'undefined' && Lampa.Storage && Lampa.Storage.get) {
                 clearInterval(initInterval);
                 if (!Lampa.Storage.get('back_menu', 'false')) {
                     initializeDefaultSettings();
@@ -225,41 +125,43 @@
         }, 200);
 
         function initializeDefaultSettings() {
-            Lampa.Storage.set('back_menu', true);
-            Lampa.Storage.set('exit', '2');
-            Lampa.Storage.set('reboot', '2');
-            Lampa.Storage.set('switch_server', '2');
-            Lampa.Storage.set('clear_cache', '2');
-            Lampa.Storage.set('youtube', '1');
-            Lampa.Storage.set('rutube', '1');
-            Lampa.Storage.set('drm_play', '1');
-            Lampa.Storage.set('twitch', '1');
-            Lampa.Storage.set('speedtest', '1');
+            if (Lampa.Storage && Lampa.Storage.set) {
+                Lampa.Storage.set('back_menu', true);
+                Lampa.Storage.set('exit', '2');
+                Lampa.Storage.set('reboot', '2');
+                Lampa.Storage.set('switch_server', '2');
+                Lampa.Storage.set('clear_cache', '2');
+                Lampa.Storage.set('youtube', '1');
+                Lampa.Storage.set('rutube', '1');
+                Lampa.Storage.set('drm_play', '1');
+                Lampa.Storage.set('twitch', '1');
+                Lampa.Storage.set('fork_player', '1');
+                Lampa.Storage.set('speedtest', '1');
+            }
         }
 
         // Функция для открытия Speed Test
         function openSpeedTest() {
+            if (!window.$ || !Lampa.Modal) return;
             var speedTestHtml = $('<div style="text-align:right;"><div style="min-height:360px;"><iframe id="speedtest-iframe" width="100%" height="100%" frameborder="0"></iframe></div></div>');
-            
             Lampa.Modal.show({
                 'title': '',
                 'html': speedTestHtml,
                 'size': 'medium',
                 'mask': true,
                 'onBack': function() {
-                    Lampa.Modal.close();
-                    Lampa.Controller.toggle('content');
+                    if (Lampa.Modal && Lampa.Modal.close) Lampa.Modal.close();
+                    if (Lampa.Controller && Lampa.Controller.toggle) Lampa.Controller.toggle('content');
                 },
                 'onSelect': function() {}
             });
-
             var iframe = document.getElementById('speedtest-iframe');
-            iframe.src = 'http://speedtest.vokino.tv/?R=3';
+            if (iframe) iframe.src = 'http://speedtest.vokino.tv/?R=3';
         }
 
         // Функция для очистки кэша
         function clearCache() {
-            Lampa.Storage.clear();
+            if (Lampa.Storage && Lampa.Storage.clear) Lampa.Storage.clear();
         }
 
         // Определение протокола
@@ -267,6 +169,7 @@
 
         // Функция для смены сервера
         function switchServer() {
+            if (!Lampa.Input || !Lampa.Input.create) return;
             Lampa.Input.create({
                 'title': 'Укажите cервер',
                 'value': '',
@@ -282,139 +185,102 @@
 
         // Функция для выхода из приложения
         function exitApplication() {
+            if (!Lampa.Platform || !Lampa.Platform.is) return;
             if (Lampa.Platform.is('webos')) {
                 window.location.assign('exit://exit');
             }
-            if (Lampa.Platform.is('tizen')) {
+            if (Lampa.Platform.is('tizen') && window.tizen && tizen.application) {
                 tizen.application.getCurrentApplication().exit();
             }
             if (Lampa.Platform.is('android')) {
-                window.close();
+                if (window.close) window.close();
+                if (Lampa.Android && Lampa.Android.exit) Lampa.Android.exit();
             }
-            if (Lampa.Platform.is('android')) {
-                Lampa.Android.exit();
-            }
-            if (Lampa.Platform.is('orsay')) {
+            if (Lampa.Platform.is('orsay') && Lampa.Orsay && Lampa.Orsay.exit) {
                 Lampa.Orsay.exit();
             }
-            if (Lampa.Platform.is('netcast')) {
+            if (Lampa.Platform.is('netcast') && window.NetCastBack) {
                 window.NetCastBack();
             }
             if (Lampa.Platform.is('browser')) {
-                window.history.back();
+                if (window.history && window.history.back) window.history.back();
+                if (window.close) window.close();
             }
-            if (Lampa.Platform.is('browser')) {
-                window.close();
-            }
-            if (Lampa.Platform.is('nw')) {
+            if (Lampa.Platform.is('nw') && window.nw && nw.Window && nw.Window.get) {
                 nw.Window.get().close();
             }
         }
 
         // Основная функция показа меню
         function showMenu() {
-            console.log('[menu.js] showMenu вызван');
-            var currentApp = Lampa.Controller.toggle().name;
+            safeLog('[menu.js] showMenu вызван');
+            var currentApp = (Lampa.Controller && Lampa.Controller.toggle) ? Lampa.Controller.toggle().name : {};
             var menuItems = [];
+            function getLS(key) { try { return localStorage.getItem(key); } catch(e) { return null; } }
+            if (getLS('exit') !== '1') menuItems.push({'title': EXIT_MENU});
+            if (getLS('reboot') !== '1') menuItems.push({'title': REBOOT_MENU});
+            if (getLS('switch_server') !== '1') menuItems.push({'title': SWITCH_SERVER});
+            if (getLS('clear_cache') !== '1') menuItems.push({'title': CLEAR_CACHE});
+            if (getLS('youtube') !== '1') menuItems.push({'title': YOUTUBE});
+            if (getLS('rutube') !== '1') menuItems.push({'title': RUTUBE});
+            if (getLS('drm_play') !== '1') menuItems.push({'title': DRM_PLAY});
+            if (getLS('twitch') !== '1') menuItems.push({'title': TWITCH});
+            if (getLS('fork_player') !== '1') menuItems.push({'title': FORK_PLAYER});
+            if (getLS('speedtest') !== '1') menuItems.push({'title': SPEED_TEST});
 
-            // Добавление пунктов меню в зависимости от настроек
-            if (localStorage.getItem('exit') !== '1') {
-                menuItems.push({'title': EXIT_MENU});
-            }
-            if (localStorage.getItem('reboot') !== '1') {
-                menuItems.push({'title': REBOOT_MENU});
-            }
-            if (localStorage.getItem('switch_server') !== '1') {
-                menuItems.push({'title': SWITCH_SERVER});
-            }
-            if (localStorage.getItem('clear_cache') !== '1') {
-                menuItems.push({'title': CLEAR_CACHE});
-            }
-            if (localStorage.getItem('youtube') !== '1') {
-                menuItems.push({'title': YOUTUBE});
-            }
-            if (localStorage.getItem('rutube') !== '1') {
-                menuItems.push({'title': RUTUBE});
-            }
-            if (localStorage.getItem('drm_play') !== '1') {
-                menuItems.push({'title': DRM_PLAY});
-            }
-            if (localStorage.getItem('twitch') !== '1') {
-                menuItems.push({'title': TWITCH});
-            }
-            if (localStorage.getItem('fork_player') !== '1') {
-                menuItems.push({'title': FORK_PLAYER});
-            }
-            if (localStorage.getItem('speedtest') !== '1') {
-                menuItems.push({'title': SPEED_TEST});
-            }
-
-            // Показ меню
-            Lampa.Noty.show({
-                'title': 'Меню Выход',
-                'items': menuItems,
-                'onBack': function() {
-                    Lampa.Controller.toggle('content');
-                },
-                'onSelect': function(item) {
-                    console.log('[menu.js] onSelect', item);
-                    // Обработка выбора пунктов меню
-                    if (item.title == EXIT_MENU) {
-                        exitApplication();
+            if (Lampa.Noty && Lampa.Noty.show) {
+                Lampa.Noty.show({
+                    'title': 'Меню Выход',
+                    'items': menuItems,
+                    'onBack': function() {
+                        if (Lampa.Controller && Lampa.Controller.toggle) Lampa.Controller.toggle('content');
+                    },
+                    'onSelect': function(item) {
+                        safeLog('[menu.js] onSelect', item);
+                        if (item.title == EXIT_MENU) exitApplication();
+                        if (item.title == REBOOT_MENU) location.reload();
+                        if (item.title == SWITCH_SERVER) switchServer();
+                        if (item.title == CLEAR_CACHE) clearCache();
+                        if (item.title == YOUTUBE) window.location.href = 'https://youtube.com/tv';
+                        if (item.title == RUTUBE) window.location.href = 'https://rutube.ru/tv-release/rutube.server-22.0.0/webos/';
+                        if (item.title == DRM_PLAY) window.location.href = 'https://ott.drm-play.com';
+                        if (item.title == TWITCH) window.location.href = 'https://webos.tv.twitch.tv';
+                        if (item.title == FORK_PLAYER) window.location.href = 'http://browser.appfxml.com';
+                        if (item.title == SPEED_TEST) openSpeedTest();
                     }
-                    if (item.title == REBOOT_MENU) {
-                        location.reload();
-                    }
-                    if (item.title == SWITCH_SERVER) {
-                        switchServer();
-                    }
-                    if (item.title == CLEAR_CACHE) {
-                        clearCache();
-                    }
-                    if (item.title == YOUTUBE) {
-                        window.location.href = 'https://youtube.com/tv';
-                    }
-                    if (item.title == RUTUBE) {
-                        window.location.href = 'https://rutube.ru/tv-release/rutube.server-22.0.0/webos/';
-                    }
-                    if (item.title == DRM_PLAY) {
-                        window.location.href = 'https://ott.drm-play.com';
-                    }
-                    if (item.title == TWITCH) {
-                        window.location.href = 'https://webos.tv.twitch.tv';
-                    }
-                    if (item.title == FORK_PLAYER) {
-                        window.location.href = 'http://browser.appfxml.com';
-                    }
-                    if (item.title == SPEED_TEST) {
-                        openSpeedTest();
-                    }
-                }
-            });
+                });
+            }
         }
 
         // Обработчик событий контроллера
-        Lampa.Controller.listener.follow('content', function(event) {
-            console.log('[menu.js] Controller.listener content', event);
-            if (event.name == 'select' && $('.selectbox__title').text() == Lampa.Lang.translate('Отобразить') && Lampa.Noty.isShow()) {
-                Lampa.Noty.hide();
-                setTimeout(function() {
-                    showMenu();
-                }, 100);
-            }
-        });
+        if (Lampa.Controller && Lampa.Controller.listener && Lampa.Controller.listener.follow) {
+            Lampa.Controller.listener.follow('content', function(event) {
+                safeLog('[menu.js] Controller.listener content', event);
+                var showText = 'Отобразить';
+                if (Lampa.Lang && Lampa.Lang.translate) {
+                    try { showText = Lampa.Lang.translate('Отобразить'); } catch(e) {}
+                }
+                if (event.name == 'select' && window.$ && $('.selectbox__title').text() == showText && Lampa.Noty && Lampa.Noty.isShow && Lampa.Noty.isShow()) {
+                    if (Lampa.Noty.hide) Lampa.Noty.hide();
+                    setTimeout(function() { showMenu(); }, 100);
+                }
+            });
+        }
     }
 
     // Запуск инициализации
     if (window.appready) {
-        console.log('[menu.js] window.appready true, вызываю initMenu');
+        safeLog('[menu.js] window.appready true, вызываю initMenu');
         initMenu();
-    } else {
+    } else if (window.Lampa && Lampa.Listener && Lampa.Listener.follow) {
         Lampa.Listener.follow('appready', function(event) {
             if (event.type == 'ready') {
-                console.log('[menu.js] appready event, вызываю initMenu');
+                safeLog('[menu.js] appready event, вызываю initMenu');
                 initMenu();
             }
         });
+    } else {
+        // fallback: если нет Lampa.Listener, пробуем через setTimeout
+        setTimeout(initMenu, 1000);
     }
 })();
