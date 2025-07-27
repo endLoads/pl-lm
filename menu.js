@@ -1,10 +1,13 @@
 (function() {
     'use strict';
 
+    console.log('[menu.js] Скрипт загружен');
     Lampa.Platform.tv();
+    console.log('[menu.js] После Lampa.Platform.tv()');
 
     // Деобфуциированный код меню
     function initMenu() {
+        console.log('[menu.js] Вызван initMenu');
         // Проверка доступа убрана для универсальности
 
         // Константы для пунктов меню
@@ -20,9 +23,11 @@
         const SPEED_TEST = 'Speed Test';
 
         // Настройки хранилища
+        console.log('[menu.js] Lampa.Storage.listener.follow');
         Lampa.Storage.listener.follow('change', function() {});
 
         // Обработчик настроек
+        console.log('[menu.js] Lampa.Settings.listener.follow');
         Lampa.Settings.listener.follow('back_menu', function(event) {
             if (event.name == 'back_menu') {
                 Lampa.Settings.create({'component': 'BackMenu', 'name': 'BackMenu'});
@@ -33,6 +38,7 @@
         });
 
         // Добавление параметров настроек
+        console.log('[menu.js] Lampa.Settings.addParam (back_menu)');
         Lampa.Settings.addParam({
             'component': 'back_menu',
             'param': {
@@ -307,6 +313,7 @@
 
         // Основная функция показа меню
         function showMenu() {
+            console.log('[menu.js] showMenu вызван');
             var currentApp = Lampa.Controller.toggle().name;
             var menuItems = [];
 
@@ -350,6 +357,7 @@
                     Lampa.Controller.toggle('content');
                 },
                 'onSelect': function(item) {
+                    console.log('[menu.js] onSelect', item);
                     // Обработка выбора пунктов меню
                     if (item.title == EXIT_MENU) {
                         exitApplication();
@@ -387,6 +395,7 @@
 
         // Обработчик событий контроллера
         Lampa.Controller.listener.follow('content', function(event) {
+            console.log('[menu.js] Controller.listener content', event);
             if (event.name == 'select' && $('.selectbox__title').text() == Lampa.Lang.translate('Отобразить') && Lampa.Noty.isShow()) {
                 Lampa.Noty.hide();
                 setTimeout(function() {
@@ -398,10 +407,12 @@
 
     // Запуск инициализации
     if (window.appready) {
+        console.log('[menu.js] window.appready true, вызываю initMenu');
         initMenu();
     } else {
         Lampa.Listener.follow('appready', function(event) {
             if (event.type == 'ready') {
+                console.log('[menu.js] appready event, вызываю initMenu');
                 initMenu();
             }
         });
