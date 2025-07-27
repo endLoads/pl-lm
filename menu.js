@@ -4,6 +4,17 @@
     // Инициализация платформы
     Lampa.Platform.tv();
 
+    // Универсальная функция для добавления параметров меню
+    function addMenuParam(param) {
+        if (Lampa.SettingsApi && typeof Lampa.SettingsApi.addParam === 'function') {
+            Lampa.SettingsApi.addParam(param);
+        } else if (Lampa.Settings && typeof Lampa.Settings.addParam === 'function') {
+            Lampa.Settings.addParam(param);
+        } else {
+            console.error('Не найден метод addParam для настроек Lampa');
+        }
+    }
+
     // Основная функция инициализации меню
     function initMenu() {
         // Константы для пунктов меню
@@ -32,22 +43,7 @@
         });
 
         // Добавление параметров меню в настройки
-        function addMenuParam(name, title, def) {
-            Lampa.Settings.addParam({
-                'component': 'back_menu',
-                'param': {
-                    'name': name,
-                    'type': 'select',
-                    'values': { 1: 'Скрыть', 2: 'Отобразить' },
-                    'default': def
-                },
-                'field': {
-                    'name': title,
-                    'description': 'Нажмите для выбора'
-                }
-            });
-        }
-        Lampa.Settings.addParam({
+        addMenuParam({
             'component': 'back_menu',
             'param': {
                 'name': 'back_menu',
@@ -67,16 +63,31 @@
                 });
             }
         });
-        addMenuParam('exit', 'Закрыть приложение', '2');
-        addMenuParam('reboot', 'Перезагрузить', '2');
-        addMenuParam('switch_server', 'Сменить сервер', '2');
-        addMenuParam('clear_cache', 'Очистить кэш', '2');
-        addMenuParam('youtube', 'YouTube', '1');
-        addMenuParam('rutube', 'RuTube', '1');
-        addMenuParam('drm_play', 'DRM Play', '1');
-        addMenuParam('twitch', 'Twitch', '1');
-        addMenuParam('fork_player', 'ForkPlayer', '1');
-        addMenuParam('speedtest', 'Speed Test', '1');
+        function addSimpleMenuParam(name, title, def) {
+            addMenuParam({
+                'component': 'back_menu',
+                'param': {
+                    'name': name,
+                    'type': 'select',
+                    'values': { 1: 'Скрыть', 2: 'Отобразить' },
+                    'default': def
+                },
+                'field': {
+                    'name': title,
+                    'description': 'Нажмите для выбора'
+                }
+            });
+        }
+        addSimpleMenuParam('exit', 'Закрыть приложение', '2');
+        addSimpleMenuParam('reboot', 'Перезагрузить', '2');
+        addSimpleMenuParam('switch_server', 'Сменить сервер', '2');
+        addSimpleMenuParam('clear_cache', 'Очистить кэш', '2');
+        addSimpleMenuParam('youtube', 'YouTube', '1');
+        addSimpleMenuParam('rutube', 'RuTube', '1');
+        addSimpleMenuParam('drm_play', 'DRM Play', '1');
+        addSimpleMenuParam('twitch', 'Twitch', '1');
+        addSimpleMenuParam('fork_player', 'ForkPlayer', '1');
+        addSimpleMenuParam('speedtest', 'Speed Test', '1');
 
         // Инициализация значений по умолчанию
         var initInterval = setInterval(function() {
