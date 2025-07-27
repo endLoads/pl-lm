@@ -5,11 +5,7 @@
 
     // Деобфуциированный код меню
     function initMenu() {
-        // Проверка доступа к Lampa - исправленная версия
-        if (Lampa.Manifest.get('origin') !== 'bylampa') {
-            Lampa.Noty.create('Ошибка доступа');
-            return;
-        }
+        // Проверка доступа убрана для универсальности
 
         // Константы для пунктов меню
         const EXIT_MENU = 'Выход ';
