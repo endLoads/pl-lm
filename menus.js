@@ -18,39 +18,30 @@
     }();
     "use strict";
     function vel() {
-      var aaratrika = seiry(this, function () {
-        var oscor = function () {
-          var kennyel;
-          try {
-            kennyel = Function('return (function() {}.constructor("return this")( ));')();
-          } catch (daviney) {
-            kennyel = window;
-          }
-          return kennyel;
-        };
-        var om = oscor();
-        var malanii = om.console = om.console || {};
-        var choyce = ["log", "warn", "info", "error", "exception", "table", "trace"];
-        for (var johnross = 0; johnross < choyce.length; johnross++) {
-          var alishaba = seiry.constructor.prototype.bind(seiry);
-          var lazariah = choyce[johnross];
-          var bintu = malanii[lazariah] || alishaba;
-          alishaba.__proto__ = seiry.bind(seiry);
-          alishaba.toString = bintu.toString.bind(bintu);
-          malanii[lazariah] = alishaba;
-        }
-      });
-      aaratrika();
       if (Lampa.Manifest.origin !== "bylampa") {
         Lampa.Noty.show("Ошибка доступа");
         return;
       }
-      Lampa.Storage.listener.follow("change", function (charlanne) {});
+
+      var backMenuVisibilityValues = {1: \"Скрыть\", 2: \"Отобразить\"};
+      var backMenuItems = [
+        {name: \"exit\",          defaultValue: \"2\", title: \"Закрыть приложение\"},
+        {name: \"reboot\",        defaultValue: \"2\", title: \"Перезагрузить\"},
+        {name: \"switch_server\", defaultValue: \"2\", title: \"Сменить сервер\"},
+        {name: \"clear_cache\",   defaultValue: \"2\", title: \"Очистить кэш\"},
+        {name: \"youtube\",       defaultValue: \"1\", title: \"YouTube\"},
+        {name: \"rutube\",        defaultValue: \"1\", title: \"RuTube\"},
+        {name: \"drm_play\",      defaultValue: \"1\", title: \"DRM Play\"},
+        {name: \"twitch\",        defaultValue: \"1\", title: \"Twitch\"},
+        {name: \"fork_player\",   defaultValue: \"1\", title: \"ForkPlayer\"},
+        {name: \"speedtest\",     defaultValue: \"1\", title: \"Speed Test\"}
+      ];
       Lampa.Settings.listener.follow("open", function (tatevik) {
         if (tatevik.name == "main") {
           Lampa.SettingsApi.addComponent({component: "back_menu", name: "BackMenu"});
           setTimeout(function () {
-            $('div[data-component="back_menu"]').remove();
+            var backMenuElement = $("div[data-component=\"back_menu\"]");
+            if (backMenuElement.length) backMenuElement.remove();
           }, 0);
         }
       });
@@ -62,36 +53,47 @@
           };
         });
       }});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "exit", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "2"}, field: {name: "Закрыть приложение", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "reboot", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "2"}, field: {name: "Перезагрузить", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "switch_server", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "2"}, field: {name: "Сменить сервер", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "clear_cache", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "2"}, field: {name: "Очистить кэш", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "youtube", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "1"}, field: {name: "YouTube", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "rutube", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "1"}, field: {name: "RuTube", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "drm_play", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "1"}, field: {name: "DRM Play", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "twitch", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "1"}, field: {name: "Twitch", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "fork_player", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "1"}, field: {name: "ForkPlayer", description: "Нажмите для выбора"}});
-      Lampa.SettingsApi.addParam({component: "back_menu", param: {name: "speedtest", type: "select", values: {1: "Скрыть", 2: "Отобразить"}, default: "1"}, field: {name: "Speed Test", description: "Нажмите для выбора"}});
-      var rikeisha = setInterval(function () {
+      backMenuItems.forEach(function (item) {
+        Lampa.SettingsApi.addParam({
+          component: "back_menu",
+          param: {
+            name: item.name,
+            type: "select",
+            values: backMenuVisibilityValues,
+            default: item.defaultValue
+          },
+          field: {
+            name: item.title,
+            description: "Нажмите для выбора"
+          }
+        });
+      });
+      var initBackMenuInterval = setInterval(function () {
         if (typeof Lampa !== "undefined") {
-          clearInterval(rikeisha);
+          clearInterval(initBackMenuInterval);
           if (!Lampa.Storage.get("back_plug", "false")) {
             shimya();
           }
         }
       }, 200);
       function shimya() {
-        Lampa.Storage.set("back_plug", true);
-        Lampa.Storage.set("exit", "2");
-        Lampa.Storage.set("reboot", "2");
-        Lampa.Storage.set("switch_server", "2");
-        Lampa.Storage.set("clear_cache", "2");
-        Lampa.Storage.set("youtube", "1");
-        Lampa.Storage.set("rutube", "1");
-        Lampa.Storage.set("drm_play", "1");
-        Lampa.Storage.set("twitch", "1");
-        Lampa.Storage.set("fork_player", "1");
-        Lampa.Storage.set("speedtest", "1");
+        var defaults = {
+          back_plug: true,
+          exit: "2",
+          reboot: "2",
+          switch_server: "2",
+          clear_cache: "2",
+          youtube: "1",
+          rutube: "1",
+          drm_play: "1",
+          twitch: "1",
+          fork_player: "1",
+          speedtest: "1"
+        };
+
+        Object.keys(defaults).forEach(function (key) {
+          Lampa.Storage.set(key, defaults[key]);
+        });
       }
       function nitza() {
         var crissie = $('<div style="text-align:right;"><div style="min-height:360px;"><iframe id="speedtest-iframe" width="100%" height="100%" frameborder="0"></iframe></div></div>');
