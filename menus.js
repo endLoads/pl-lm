@@ -1,7 +1,7 @@
+Lampa.Platform.tv();
+
 (function() {
     'use strict';
-
-Lampa.Platform.tv();
 
     function initPlugin() {
         var antiDebug1 = (function() {
@@ -69,6 +69,22 @@ Lampa.Platform.tv();
         var twitchButtonHtml = '<div class="settings-folder" style="padding:0!important"><div style="width:2.2em;height:1.7em;padding-right:.5em"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M3.774 2L2.45 5.452v14.032h4.774V22h2.678l2.548-2.548h3.871l5.226-5.226V2zm15.968 11.323l-3 3h-4.743L9.452 18.87v-2.548H5.42V3.774h14.32zm-2.968-6.097v5.226h-1.775V7.226zm-4.775 0v5.226h-1.774V7.226z"/></svg></div><div style="font-size:1.3em">Twitch</div></div>';
         var forkPlayerButtonHtml = '<div class="settings-folder" style="padding:0!important"><div style="width:2.2em;height:1.7em;padding-right:.5em"><svg width="256px" height="256px" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="#000000" stroke="#000000" stroke-width="0.00032"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <g fill="none" fill-rule="evenodd"> <path d="m0 0h32v32h-32z"></path> <g fill="#ffffff" fill-rule="nonzero"> <path d="m32 16c0-8.83636363-7.1636364-16-16-16-8.83636362 0-16 7.16363638-16 16 0 8.8363636 7.16363638 16 16 16 8.8363636 0 16-7.1636364 16-16zm-30.54545453 0c0-8.03345453 6.512-14.54545453 14.54545453-14.54545453 8.0334545 0 14.5454545 6.512 14.5454545 14.54545453 0 8.0334545-6.512 14.5454545-14.5454545 14.5454545-8.03345453 0-14.54545453-6.512-14.54545453-14.5454545z"></path> <path d="m16.6138182 25.2349091v-9.2349091h3.0472727l.4814545-3.0603636h-3.5287272v-1.5345455c0-.7985455.2618182-1.56072727 1.408-1.56072727h2.2909091v-3.05454547h-3.2523636c-2.7345455 0-3.4807273 1.80072728-3.4807273 4.29672724v1.8516364h-1.8763637v3.0618182h1.8763636v9.2349091z"></path> </g> </g> </g></svg></div><div style="font-size:1.3em">ForkPlayer</div></div>';
         var speedTestButtonHtml = '<div class="settings-folder" style="padding:0!important"><div style="width:2.2em;height:1.7em;padding-right:.5em"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M10.45 15.5q.625.625 1.575.588T13.4 15.4L19 7l-8.4 5.6q-.65.45-.712 1.362t.562 1.538M5.1 20q-.55 0-1.012-.238t-.738-.712q-.65-1.175-1-2.437T2 14q0-2.075.788-3.9t2.137-3.175T8.1 4.788T12 4q2.05 0 3.85.775T19 6.888t2.15 3.125t.825 3.837q.025 1.375-.312 2.688t-1.038 2.512q-.275.475-.737.713T18.874 20z"/></svg></div><div style="font-size:1.3em">Speed Test</div></div>';
+
+        // Добавление пункта меню "Выход"
+        Lampa.Template.add('menu_exit', '<li class="menu__item selector" data-action="exit"><div class="menu__ico"><svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 32 32"><path d="M16,2A14,14,0,1,0,30,16,14,14,0,0,0,16,2Zm5.914,7.5,2.121,2.121L19.121,16.5l4.914,4.879-2.121,2.121L17,18.621,12.086,23.5,9.965,21.379,14.879,16.5,9.965,11.621l2.121-2.121L17,14.379Z"/></svg></div><div class="menu__text">Выход</div></li>');
+
+        Lampa.Listener.follow('app', function(e) {
+            if (e.type == 'ready') {
+                var menuItems = $('.menu .menu__list');
+                if (menuItems.length) {
+                    menuItems.append(Lampa.Template.get('menu_exit'));
+                    
+                    $('[data-action="exit"]').on('hover:enter', function() {
+                        showBackMenu();
+                    });
+                }
+            }
+        });
 
         Lampa['Controller']['listener']['follow']('enabled', function(event) {});
         
