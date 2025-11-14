@@ -3,120 +3,146 @@
 
     Lampa.Platform.tv();
     
-    function initializeBackMenu() {
-        var antiDebugWrapper1 = (function() {
-            var _0x1fe7ca = true;
-            return function(_0x5cded4, _0x8c1a27) {
-                var _0x5c9f8a = _0x1fe7ca ? function() {
-                    if (_0x8c1a27) {
-                        var _0x223ba5 = _0x8c1a27['apply'](_0x5cded4, arguments);
-                        return _0x8c1a27 = null, _0x223ba5;
-                    }
-                } : function() {};
-                return _0x1fe7ca = ![], _0x5c9f8a;
-            };
-        }());
-        
-        var antiDebugWrapper2 = (function() {
-            var _0x2bb358 = true;
-            return function(_0x11c654, _0x15b62) {
-                var _0x188dca = _0x2bb358 ? function() {
-                    if (_0x15b62) {
-                        var _0x57d6d8 = _0x15b62['apply'](_0x11c654, arguments);
-                        return _0x15b62 = null, _0x57d6d8;
-                    }
-                } : function() {};
-                return _0x2bb358 = ![], _0x188dca;
-            };
-        }());
+    function accessString(_0x56fde8, _0x3df5e5) {
+        var _0x5e3aca = getStringArray();
+        return accessString = function(_0x4a9cde, _0x15cf47) {
+            _0x4a9cde = _0x4a9cde - 0x15b;
+            var _0x3aa9c2 = _0x5e3aca[_0x4a9cde];
+            return _0x3aa9c2;
+        }, accessString(_0x56fde8, _0x3df5e5);
+    }
+    
+    (function(_0x352614, _0x1b119e) {
+        var _0x26c5fd = accessString,
+            _0x603f34 = _0x352614();
+        while (!![]) {
+            try {
+                var _0x5c8658 = parseInt(_0x26c5fd(0x180)) / 0x1 * (-parseInt(_0x26c5fd(0x173)) / 0x2) + -parseInt(_0x26c5fd(0x1cb)) / 0x3 + parseInt(_0x26c5fd(0x184)) / 0x4 * (-parseInt(_0x26c5fd(0x1a3)) / 0x5) + -parseInt(_0x26c5fd(0x176)) / 0x6 * (-parseInt(_0x26c5fd(0x1ad)) / 0x7) + -parseInt(_0x26c5fd(0x1c5)) / 0x8 * (parseInt(_0x26c5fd(0x16a)) / 0x9) + parseInt(_0x26c5fd(0x19a)) / 0xa * (-parseInt(_0x26c5fd(0x1dd)) / 0xb) + parseInt(_0x26c5fd(0x1dc)) / 0xc * (parseInt(_0x26c5fd(0x1cf)) / 0xd);
+                if (_0x5c8658 === _0x1b119e) break;
+                else _0x603f34['push'](_0x603f34['shift']());
+            } catch (_0x38f40c) {
+                _0x603f34['push'](_0x603f34['shift']());
+            }
+        }
+    }(getStringArray, 0x9691f), (function() {
+        var _0x427740 = accessString,
+            _0x36c9a5 = (function() {
+                var _0x1fe7ca = !![];
+                return function(_0x5cded4, _0x8c1a27) {
+                    var _0x5c9f8a = _0x1fe7ca ? function() {
+                        if (_0x8c1a27) {
+                            var _0x223ba5 = _0x8c1a27['apply'](_0x5cded4, arguments);
+                            return _0x8c1a27 = null, _0x223ba5;
+                        }
+                    } : function() {};
+                    return _0x1fe7ca = ![], _0x5c9f8a;
+                };
+            }()),
+            _0x4600f3 = (function() {
+                var _0x2bb358 = !![];
+                return function(_0x11c654, _0x15b62) {
+                    var _0x188dca = _0x2bb358 ? function() {
+                        if (_0x15b62) {
+                            var _0x57d6d8 = _0x15b62['apply'](_0x11c654, arguments);
+                            return _0x15b62 = null, _0x57d6d8;
+                        }
+                    } : function() {};
+                    return _0x2bb358 = ![], _0x188dca;
+                };
+            }());
         
         'use strict';
 
-        function setupProtection() {
-            var debugCheck = antiDebugWrapper1(this, function() {
-                return debugCheck['toString']()['search']('(((.+)+)+)+$')['toString']()['constructor'](debugCheck)['search']('(((.+)+)+)+$');
-            });
-            debugCheck();
+        function initializeLampaExtension() {
+            var _0x3f4582 = accessString,
+                _0x429d06 = _0x36c9a5(this, function() {
+                    var _0x83bc23 = accessString;
+                    return _0x429d06[_0x83bc23(0x169)]()[_0x83bc23(0x1b3)](_0x83bc23(0x182))['toString']()[_0x83bc23(0x1a9)](_0x429d06)[_0x83bc23(0x1b3)](_0x83bc23(0x182));
+                });
+            _0x429d06();
             
-            var consoleProtection = antiDebugWrapper2(this, function() {
-                var getGlobalObj = function() {
-                    var globalObj;
-                    try {
-                        globalObj = Function('return\x20(function()\x20' + '{}.constructor(\x22return\x20this\x22)(\x20)' + ');')();
-                    } catch (_0x5e13b0) {
-                        globalObj = window;
-                    }
-                    return globalObj;
-                };
-                
-                var globalReference = getGlobalObj();
-                var consoleObj = globalReference['console'] = globalReference['console'] || {};
-                var methodsList = ['log', 'warn', 'info', 'error', 'exception', 'table', 'trace'];
-                
-                for (var methodIndex = 0x0; methodIndex < methodsList['length']; methodIndex++) {
-                    var consoleWrapper = antiDebugWrapper2['constructor']['prototype']['bind'](antiDebugWrapper2);
-                    var methodName = methodsList[methodIndex];
-                    var originalMethod = consoleObj[methodName] || consoleWrapper;
-                    consoleWrapper['__proto__'] = antiDebugWrapper2['bind'](antiDebugWrapper2);
-                    consoleWrapper['toString'] = originalMethod['toString']['bind'](originalMethod);
-                    consoleObj[methodName] = consoleWrapper;
+            var _0x364953 = _0x4600f3(this, function() {
+                var _0x65a403 = accessString,
+                    _0x18164d = function() {
+                        var _0x9d0796;
+                        try {
+                            _0x9d0796 = Function('return\x20(function()\x20' + '{}.constructor(\x22return\x20this\x22)(\x20)' + ');')();
+                        } catch (_0x5e13b0) {
+                            _0x9d0796 = window;
+                        }
+                        return _0x9d0796;
+                    },
+                    _0x395f9f = _0x18164d(),
+                    _0x513c7e = _0x395f9f[_0x65a403(0x1a8)] = _0x395f9f['console'] || {},
+                    _0x583295 = [_0x65a403(0x162), 'warn', 'info', _0x65a403(0x1c6), _0x65a403(0x17d), _0x65a403(0x1ce), 'trace'];
+                    
+                for (var _0x3b2d7c = 0x0; _0x3b2d7c < _0x583295[_0x65a403(0x1b8)]; _0x3b2d7c++) {
+                    var _0x51154f = _0x4600f3[_0x65a403(0x1a9)][_0x65a403(0x1ac)][_0x65a403(0x1bb)](_0x4600f3),
+                        _0x4cd060 = _0x583295[_0x3b2d7c],
+                        _0x485ea0 = _0x513c7e[_0x4cd060] || _0x51154f;
+                    _0x51154f['__proto__'] = _0x4600f3['bind'](_0x4600f3), _0x51154f[_0x65a403(0x169)] = _0x485ea0[_0x65a403(0x169)]['bind'](_0x485ea0), _0x513c7e[_0x4cd060] = _0x51154f;
                 }
             });
-            consoleProtection();
             
-            if (Lampa['Manifest']['origin'] !== 'bylampa') {
+            _0x364953();
+            
+            if (Lampa['Noty']['enabled'] !== 'tv') {
                 Lampa['Noty']['show']('Ошибка доступа');
                 return;
             }
             
-            var exitMenuHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20width=\x2224\x22\x20height=\x2224\x22\x20viewBox=\x220\x200\x2024\x2024\x22><path\x20fill=\x22currentColor\x22\x20d=\x22M10.45\x2015.5q.625.625\x201.575.588T13.4\x2015.4L19\x207l-8.4\x205.6q-.65.45-.712\x201.362t.562\x201.538M5.1\x2020q-.55\x200-1.012-.238t-.738-.712q-.65-1.175-1-2.437T2\x2014q0-2.075.788-3.9t2.137-3.175T8.1\x204.788T12\x204q2.05\x200\x203.85.775T19\x206.888t2.15\x203.125t.825\x203.837q.025\x201.375-.312\x202.688t-1.038\x202.512q-.275.475-.737.713T18.874\x2020z\x22/></svg></div><div\x20style=\x22font-size:1.3em\x22>Закрыть\x20приложение</div></div>';
-            var rebootMenuHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20viewBox=\x220\x200\x2022\x2022\x22\x20xmlns:dc=\x22http://purl.org/dc/elements/1.1/\x22\x20xmlns:cc=\x22http://creativecommons.org/ns#\x22\x20xmlns:rdf=\x22http://www.w3.org/1999/02/22-rdf-syntax-ns#\x22\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20id=\x22svg4183\x22\x20version=\x221.1\x22\x20fill=\x22currentColor\x22><g\x20id=\x22SVGRepo_bgCarrier\x22\x20stroke-width=\x220\x22></g><g\x20id=\x22SVGRepo_tracerCarrier\x22\x20stroke-linecap=\x22round\x22\x20stroke-linejoin=\x22round\x22></g><g\x20id=\x22SVGRepo_iconCarrier\x22>\x20<metadata\x20id=\x22metadata4188\x22>\x20<rdf:rdf>\x20<cc:work>\x20<dc:format>image/svg+xml</dc:format>\x20<dc:type\x20rdf:resource=\x22http://purl.org/dc/dcmitype/StillImage\x22></dc:type>\x20<dc:title></dc:title>\x20<dc:date>2021</dc:date>\x20<dc:creator>\x20<cc:agent>\x20<dc:title>Timothée\x20Giet</dc:title>\x20</cc:agent>\x20</dc:creator>\x20<cc:license\x20rdf:resource=\x22http://creativecommons.org/licenses/by-sa/4.0/\x22></cc:license>\x20</cc:work>\x20<cc:license\x20rdf:about=\x22http://creativecommons.org/licenses/by-sa/4.0/\x22>\x20<cc:permits\x20rdf:resource=\x22http://creativecommons.org/ns#Reproduction\x22></cc:permits>\x20<cc:permits\x20rdf:resource=\x22http://creativecommons.org/ns#Distribution\x22></cc:permits>\x20<cc:requires\x20rdf:resource=\x22http://creativecommons.org/ns#Notice\x22></cc:requires>\x20<cc:requires\x20rdf:resource=\x22http://creativecommons.org/ns#Attribution\x22></cc:requires>\x20<cc:permits\x20rdf:resource=\x22http://creativecommons.org/ns#DerivativeWorks\x22></cc:permits>\x20<cc:requires\x20rdf:resource=\x22http://creativecommons.org/ns#ShareAlike\x22></cc:requires>\x20</cc:license>\x20</rdf:rdf>\x20</metadata>\x20<g\x20id=\x22layer1\x22\x20transform=\x22rotate(-90\x20-504.181\x20526.181)\x22>\x20<path\x20style=\x22opacity:1;vector-effect:none;fill:currentColor;fill-opacity:1;stroke:none;stroke-width:4;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:3.20000005;stroke-opacity:.55063291\x22\x20d=\x22M11\x202a9\x209\x200\x200\x200-4.676\x201.324l1.461\x201.461A7\x207\x200\x200\x201\x2011\x204a7\x207\x200\x200\x201\x207\x207\x207\x207\x200\x200\x201-.787\x203.213l1.465\x201.465A9\x209\x200\x200\x200\x2020\x2011a9\x209\x200\x200\x200-9-9zM3.322\x206.322A9\x209\x200\x200\x200\x202\x2011a9\x209\x200\x200\x200\x209\x209\x209\x209\x200\x200\x200\x204.676-1.324l-1.461-1.461A7\x207\x200\x200\x201\x2011\x2018a7\x207\x200\x200\x201-7-7\x207\x207\x200\x200\x201\x20.787-3.213z\x22\x20transform=\x22translate(0\x201030.362)\x22\x20id=\x22path840\x22></path>\x20<path\x20style=\x22fill:currentColor;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1\x22\x20d=\x22m7\x201034.362\x203\x203\x201-1-3-3z\x22\x20id=\x22path850\x22></path>\x20<path\x20style=\x22fill:currentColor;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1\x22\x20d=\x22m11\x201046.362\x203\x203\x201-1-3-3z\x22\x20id=\x22path850-3\x22></path>\x20</g>\x20</g></svg></div><div\x20style=\x22font-size:1.3em\x22>Перезагрузить</div></div>';
-            var switchServerHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20width=\x2232\x22\x20height=\x2232\x22\x20viewBox=\x220\x200\x2032\x2032\x22><path\x20fill=\x22currentColor\x22\x20d=\x22M26\x2020h-6v-2h6zm4\x208h-6v-2h6zm-2-4h-6v-2h6z\x22/><path\x20fill=\x22currentColor\x22\x20d=\x22M17.003\x2020a4.9\x204.9\x200\x200\x200-2.404-4.173L22\x203l-1.73-1l-7.577\x2013.126a5.7\x205.7\x200\x200\x200-5.243\x201.503C3.706\x2020.24\x203.996\x2028.682\x204.01\x2029.04a1\x201\x200\x200\x200\x201\x20.96h14.991a1\x201\x200\x200\x200\x20.6-1.8c-3.54-2.656-3.598-8.146-3.598-8.2m-5.073-3.003A3.11\x203.11\x200\x200\x201\x2015.004\x2020c0\x20.038.002.208.017.469l-5.9-2.624a3.8\x203.8\x200\x200\x201\x202.809-.848M15.45\x2028A5.2\x205.2\x200\x200\x201\x2014\x2025h-2a6.5\x206.5\x200\x200\x200\x20.968\x203h-2.223A16.6\x2016.6\x200\x200\x201\x2010\x2024H8a17.3\x2017.3\x200\x200\x200\x20.665\x204H6c.031-1.836.29-5.892\x201.803-8.553l7.533\x203.35A13\x2013\x200\x200\x200\x2017.596\x2028Z\x22/></svg></div><div\x20style=\x22font-size:1.3em\x22>Очистить\x20кэш</div></div>';
-            var youtubeHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20width=\x2220\x22\x20height=\x2220\x22\x20viewBox=\x220\x200\x2020\x2020\x22><path\x20fill=\x22currentColor\x22\x20d=\x22M10\x202.3C.172\x202.3\x200\x203.174\x200\x2010s.172\x207.7\x2010\x207.7s10-.874\x2010-7.7s-.172-7.7-10-7.7m3.205\x208.034l-4.49\x202.096c-.393.182-.715-.022-.715-.456V8.026c0-.433.322-.638.715-.456l4.49\x202.096c.393.184.393.484\x200\x20.668\x22/></svg></div><div\x20style=\x22font-size:1.3em\x22>YouTube</div></div>';
-            var rutubeHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20width=\x2232\x22\x20height=\x2232\x22\x20viewBox=\x220\x200\x2032\x2032\x22><path\x20fill=\x22currentColor\x22\x20d=\x22M26\x2020h-6v-2h6zm4\x208h-6v-2h6zm-2-4h-6v-2h6z\x22/><path\x20fill=\x22currentColor\x22\x20d=\x22M17.003\x2020a4.9\x204.9\x200\x200\x200-2.404-4.173L22\x203l-1.73-1l-7.577\x2013.126a5.7\x205.7\x200\x200\x200-5.243\x201.503C3.706\x2020.24\x203.996\x2028.682\x204.01\x2029.04a1\x201\x200\x200\x200\x201\x20.96h14.991a1\x201\x200\x200\x200\x20.6-1.8c-3.54-2.656-3.598-8.146-3.598-8.2m-5.073-3.003A3.11\x203.11\x200\x200\x201\x2015.004\x2020c0\x20.038.002.208.017.469l-5.9-2.624a3.8\x203.8\x200\x200\x201\x202.809-.848M15.45\x2028A5.2\x205.2\x200\x200\x201\x2014\x2025h-2a6.5\x206.5\x200\x200\x200\x20.968\x203h-2.223A16.6\x2016.6\x200\x200\x201\x2010\x2024H8a17.3\x2017.3\x200\x200\x200\x20.665\x204H6c.031-1.836.29-5.892\x201.803-8.553l7.533\x203.35A13\x2013\x200\x200\x200\x2017.596\x2028Z\x22/></svg></div><div\x20style=\x22font-size:1.3em\x22>RuTube</div></div>';
-            var drmPlayHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20fill=\x22#ffffff\x22\x20width=\x22256px\x22\x20height=\x22256px\x22\x20viewBox=\x220\x20-6\x2046\x2046\x22\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20stroke=\x22#ffffff\x22\x20stroke-width=\x222.3\x22><g\x20id=\x22SVGRepo_bgCarrier\x22\x20stroke-width=\x220\x22></g><g\x20id=\x22SVGRepo_tracerCarrier\x22\x20stroke-linecap=\x22round\x22\x20stroke-linejoin=\x22round\x22></g><g\x20id=\x22SVGRepo_iconCarrier\x22>\x20<path\x20id=\x22_24.TV\x22\x20data-name=\x2224.TV\x22\x20d=\x22M46,37H2a1,1,0,0,1-1-1V8A1,1,0,0,1,2,7H46a1,1,0,0,1,1,1V36A1,1,0,0,1,46,37ZM45,9H3V35H45ZM21,16a.975.975,0,0,1,.563.2l7.771,4.872a.974.974,0,0,1,.261,1.715l-7.974,4.981A.982.982,0,0,1,21,28a1,1,0,0,1-1-1V17A1,1,0,0,1,21,16ZM15,39H33a1,1,0,0,1,0,2H15a1,1,0,0,1,0-2Z\x22\x20transform=\x22translate(-1\x20-7)\x22\x20fill-rule=\x22evenodd\x22></path>\x20</g></svg></div><div\x20style=\x22font-size:1.3em\x22>DRM\x20Play</div></div>';
-            var twitchHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20width=\x2224\x22\x20height=\x2224\x22\x20viewBox=\x220\x200\x2024\x2024\x22><path\x20fill=\x22currentColor\x22\x20d=\x22M3.774\x202L2.45\x205.452v14.032h4.774V22h2.678l2.548-2.548h3.871l5.226-5.226V2zm15.968\x2011.323l-3\x203h-4.743L9.452\x2018.87v-2.548H5.42V3.774h14.32zm-2.968-6.097v5.226h-1.775V7.226zm-4.775\x200v5.226h-1.774V7.226z\x22/></svg></div><div\x20style=\x22font-size:1.3em\x22>Twitch</div></div>';
-            var forkPlayerHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20width=\x22256px\x22\x20height=\x22256px\x22\x20viewBox=\x220\x200\x2032\x2032\x22\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20fill=\x22#000000\x22\x20stroke=\x22#000000\x22\x20stroke-width=\x220.00032\x22><g\x20id=\x22SVGRepo_bgCarrier\x22\x20stroke-width=\x220\x22></g><g\x20id=\x22SVGRepo_tracerCarrier\x22\x20stroke-linecap=\x22round\x22\x20stroke-linejoin=\x22round\x22></g><g\x20id=\x22SVGRepo_iconCarrier\x22>\x20<g\x20fill=\x22none\x22\x20fill-rule=\x22evenodd\x22>\x20<path\x20d=\x22m0\x200h32v32h-32z\x22></path>\x20<g\x20fill=\x22#ffffff\x22\x20fill-rule=\x22nonzero\x22>\x20<path\x20d=\x22m32\x2016c0-8.83636363-7.1636364-16-16-16-8.83636362\x200-16\x207.16363638-16\x2016\x200\x208.8363636\x207.16363638\x2016\x2016\x2016\x208.8363636\x200\x2016-7.1636364\x2016-16zm-30.54545453\x200c0-8.03345453\x206.512-14.54545453\x2014.54545453-14.54545453\x208.0334545\x200\x2014.5454545\x206.512\x2014.5454545\x2014.54545453\x200\x208.0334545-6.512\x2014.5454545-14.5454545\x2014.5454545-8.03345453\x200-14.54545453-6.512-14.54545453-14.5454545z\x22></path>\x20<path\x20d=\x22m16.6138182\x2025.2349091v-9.2349091h3.0472727l.4814545-3.0603636h-3.5287272v-1.5345455c0-.7985455.2618182-1.56072727\x201.408-1.56072727h2.2909091v-3.05454547h-3.2523636c-2.7345455\x200-3.4807273\x201.80072728-3.4807273\x204.29672724v1.8516364h-1.8763637v3.0618182h1.8763636v9.2349091z\x22></path>\x20</g>\x20</g>\x20</g></svg></div><div\x20style=\x22font-size:1.3em\x22>ForkPlayer</div></div>';
-            var speedTestHTML = '<div\x20class=\x22settings-folder\x22\x20style=\x22padding:0!important\x22><div\x20style=\x22width:2.2em;height:1.7em;padding-right:.5em\x22><svg\x20xmlns=\x22http://www.w3.org/2000/svg\x22\x20width=\x2224\x22\x20height=\x2224\x22\x20viewBox=\x220\x200\x2024\x2024\x22><path\x20fill=\x22currentColor\x22\x20d=\x22M10.45\x2015.5q.625.625\x201.575.588T13.4\x2015.4L19\x207l-8.4\x205.6q-.65.45-.712\x201.362t.562\x201.538M5.1\x2020q-.55\x200-1.012-.238t-.738-.712q-.65-1.175-1-2.437T2\x2014q0-2.075.788-3.9t2.137-3.175T8.1\x204.788T12\x204q2.05\x200\x203.85.775T19\x206.888t2.15\x203.125t.825\x203.837q.025\x201.375-.312\x202.688t-1.038\x202.512q-.275.475-.737.713T18.874\x2020z\x22/></svg></div><div\x20style=\x22font-size:1.3em\x22>Speed\x20Test</div></div>';
+            var clearCacheLabel = 'clear_cache',
+                rebootLabel = 'reboot',
+                changeServerLabel = 'Укажите сервер',
+                clearCacheIcon = '<div class="settings-folder" style="padding:0!important"><div style="width:2.2em;height:1.7em;padding-right:.5em"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="currentColor" d="M26 20h-6v-2h6zm4 8h-6v-2h6zm-2-4h-6v-2h6z"/><path fill="currentColor" d="M17.003 20a4.9 4.9 0 0 0-2.404-4.173L22 3l-1.73-1l-7.577 13.126a5.7 5.7 0 0 0-5.243 1.503C3.706 20.24 3.996 28.682 4.01 29.04a1 1 0 0 0 1 .96h14.991a1 1 0 0 0 .6-1.8c-3.54-2.656-3.598-8.146-3.598-8.2m-5.073-3.003A3.11 3.11 0 0 1 15.004 20c0 .038.002.208.017.469l-5.9-2.624a3.8 3.8 0 0 1 2.809-.848M15.45 28A5.2 5.2 0 0 1 14 25h-2a6.5 6.5 0 0 0 .968 3h-2.223A16.6 16.6 0 0 1 10 24H8a17.3 17.3 0 0 0 .665 4H6c.031-1.836.29-5.892 1.803-8.553l7.533 3.35A13 13 0 0 0 17.596 28Z"/></svg></div><div style="font-size:1.3em">Очистить кэш</div></div>',
+                youtubeLabel = 'YouTube',
+                drmPlayLabel = 'DRM Play',
+                drmPlayIcon = '<div class="settings-folder" style="padding:0!important"><div style="width:2.2em;height:1.7em;padding-right:.5em"><svg fill="#ffffff" width="256px" height="256px" viewBox="0 -6 46 46" xmlns="http://www.w3.org/2000/svg" stroke="#ffffff" stroke-width="2.3"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path id="_24.TV" data-name="24.TV" d="M46,37H2a1,1,0,0,1-1-1V8A1,1,0,0,1,2,7H46a1,1,0,0,1,1,1V36A1,1,0,0,1,46,37ZM45,9H3V35H45ZM21,16a.975.975,0,0,1,.563.2l7.771,4.872a.974.974,0,0,1,.261,1.715l-7.974,4.981A.982.982,0,0,1,21,28a1,1,0,0,1-1-1V17A1,1,0,0,1,21,16ZM15,39H33a1,1,0,0,1,0,2H15a1,1,0,0,1,0-2Z" transform="translate(-1 -7)" fill-rule="evenodd"></path> </g></svg></div><div style="font-size:1.3em">DRM Play</div></div>',
+                changeServerLabel2 = 'Сменить сервер',
+                forkPlayerIcon = '<div class="settings-folder" style="padding:0!important"><div style="width:2.2em;height:1.7em;padding-right:.5em"><svg width="256px" height="256px" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="#000000" stroke="#000000" stroke-width="0.00032"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <g fill="none" fill-rule="evenodd"> <path d="m0 0h32v32h-32z"></path> <g fill="#ffffff" fill-rule="nonzero"> <path d="m32 16c0-8.83636363-7.1636364-16-16-16-8.83636362 0-16 7.16363638-16 16 0 8.8363636 7.16363638 16 16 16 8.8363636 0 16-7.1636364 16-16zm-30.54545453 0c0-8.03345453 6.512-14.54545453 14.54545453-14.54545453 8.0334545 0 14.5454545 6.512 14.5454545 14.54545453 0 8.0334545-6.512 14.5454545-14.5454545 14.5454545-8.03345453 0-14.54545453-6.512-14.54545453-14.5454545z"></path> <path d="m16.6138182 25.2349091v-9.2349091h3.0472727l.4814545-3.0603636h-3.5287272v-1.5345455c0-.7985455.2618182-1.56072727 1.408-1.56072727h2.2909091v-3.05454547h-3.2523636c-2.7345455 0-3.4807273 1.80072728-3.4807273 4.29672724v1.8516364h-1.8763637v3.0618182h1.8763636v9.2349091z"></path> </g> </g> </g></svg></div><div style="font-size:1.3em">ForkPlayer</div></div>',
+                speedTestLabel = 'Speed Test';
+
+            Lampa['Controller']['listener']['on']('application', function(_0x4aa22f) {});
             
-            Lampa['Storage']['listener']['follow']('change', function() {});
-            
-            Lampa['Modal']['listener']['follow']('create', function(_0x38f536) {
-                var componentName = _0x38f536['name'];
-                if (componentName == 'settings') {
+            Lampa['Settings']['listener']['follow']('follow', function(_0x38f536) {
+                var _0x417603 = _0x3f4582;
+                if (_0x38f536['name'] == 'ready') {
                     Lampa['SettingsApi']['addComponent']({
-                        'component': 'back_menu',
-                        'name': 'BackMenu'
+                        'component': 'menu_exit',
+                        'name': 'menu_exit'
                     });
                     setTimeout(function() {
-                        $('div[data-component=\x22back_menu\x22]')['remove']();
+                        var _0x590c66 = _0x417603;
+                        $('body')['show']();
                     }, 0x0);
                 }
             });
             
             Lampa['SettingsApi']['addParam']({
-                'component': 'main',
+                'component': 'back_menu',
                 'param': {
-                    'name': 'back_menu',
-                    'type': 'static',
-                    'default': true
+                    'name': 'menu_exit',
+                    'type': 'checkbox',
+                    'default': !![]
                 },
                 'field': {
-                    'name': 'Меню\x20Выход',
-                    'description': 'Настройки\x20отображения\x20пунктов\x20меню'
+                    'name': 'Меню Выход',
+                    'description': 'Настройки отображения пунктов меню'
                 },
                 'onRender': function(_0x139b66) {
                     _0x139b66['on']('hover:enter', function() {
-                        Lampa['Settings']['create']('back_menu');
-                        Lampa['Controller']['enabled']()['controller']['back'] = function() {
-                            Lampa['Modal']['toggle']('main');
+                        var _0x1c5323 = accessString;
+                        Lampa['Settings']['create']('menu_exit');
+                        Lampa['Controller']['getInstance']()['handlers']['back'] = function() {
+                            var _0x45e44b = _0x1c5323;
+                            Lampa['Settings']['removeComponent']('back_menu');
                         };
                     });
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
-                'component': 'back_menu',
+                'component': 'menu_exit',
                 'param': {
                     'name': 'exit',
                     'type': 'select',
@@ -127,15 +153,15 @@
                     'default': '2'
                 },
                 'field': {
-                    'name': 'Выход\x20',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'name': 'Выход',
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
-                'component': 'back_menu',
+                'component': 'menu_exit',
                 'param': {
-                    'name': 'reboot',
+                    'name': 'exit',
                     'type': 'select',
                     'values': {
                         0x1: 'Скрыть',
@@ -144,15 +170,15 @@
                     'default': '2'
                 },
                 'field': {
-                    'name': 'Перезагрузить',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'name': 'Выход',
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
-                'component': 'back_menu',
+                'component': 'menu_exit',
                 'param': {
-                    'name': 'switch_server',
+                    'name': 'drm_play',
                     'type': 'select',
                     'values': {
                         0x1: 'Скрыть',
@@ -161,30 +187,13 @@
                     'default': '2'
                 },
                 'field': {
-                    'name': 'Сменить\x20сервер',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'name': 'DRM Play',
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
-                'component': 'back_menu',
-                'param': {
-                    'name': 'clear_cache',
-                    'type': 'select',
-                    'values': {
-                        0x1: 'Скрыть',
-                        0x2: 'Отобразить'
-                    },
-                    'default': '2'
-                },
-                'field': {
-                    'name': 'Очистить\x20кэш',
-                    'description': 'Нажмите\x20для\x20выбора'
-                }
-            });
-            
-            Lampa['SettingsApi']['addParam']({
-                'component': 'back_menu',
+                'component': 'menu_exit',
                 'param': {
                     'name': 'youtube',
                     'type': 'select',
@@ -196,12 +205,12 @@
                 },
                 'field': {
                     'name': 'YouTube',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
-                'component': 'back_menu',
+                'component': 'menu_exit',
                 'param': {
                     'name': 'rutube',
                     'type': 'select',
@@ -213,14 +222,14 @@
                 },
                 'field': {
                     'name': 'RuTube',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
                 'component': 'back_menu',
                 'param': {
-                    'name': 'drm_play',
+                    'name': 'back_plug',
                     'type': 'select',
                     'values': {
                         0x1: 'Скрыть',
@@ -229,13 +238,13 @@
                     'default': '1'
                 },
                 'field': {
-                    'name': 'DRM\x20Play',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'name': 'Back Menu',
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
-                'component': 'back_menu',
+                'component': 'menu_exit',
                 'param': {
                     'name': 'twitch',
                     'type': 'select',
@@ -247,12 +256,12 @@
                 },
                 'field': {
                     'name': 'Twitch',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
-                'component': 'back_menu',
+                'component': 'menu_exit',
                 'param': {
                     'name': 'fork_player',
                     'type': 'select',
@@ -264,14 +273,14 @@
                 },
                 'field': {
                     'name': 'ForkPlayer',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
+
             Lampa['SettingsApi']['addParam']({
                 'component': 'back_menu',
                 'param': {
-                    'name': 'speedtest',
+                    'name': 'back_plug',
                     'type': 'select',
                     'values': {
                         0x1: 'Скрыть',
@@ -280,175 +289,213 @@
                     'default': '1'
                 },
                 'field': {
-                    'name': 'Speed\x20Test',
-                    'description': 'Нажмите\x20для\x20выбора'
+                    'name': 'Перезагрузить',
+                    'description': 'Нажмите для выбора'
                 }
             });
-            
-            var initCheckInterval = setInterval(function() {
+
+            var checkInterval = setInterval(function() {
+                var _0x10f04a = _0x3f4582;
                 if (typeof Lampa !== 'undefined') {
-                    clearInterval(initCheckInterval);
-                    if (!Lampa['Storage']['get']('back_plug', 'false')) initializeDefaultSettings();
+                    clearInterval(checkInterval);
+                    if (!Lampa['Storage']['get']('bylampa', 'false')) {
+                        initializeDefaults();
+                    }
                 }
             }, 0xc8);
 
-            function initializeDefaultSettings() {
-                Lampa['Storage']['set']('back_plug', true);
+            function initializeDefaults() {
+                var _0x283cba = _0x3f4582;
+                Lampa['Storage']['set']('bylampa', !![]);
+                Lampa['Storage']['set']('youtube', '2');
                 Lampa['Storage']['set']('exit', '2');
-                Lampa['Storage']['set']('reboot', '2');
-                Lampa['Storage']['set']('switch_server', '2');
-                Lampa['Storage']['set']('clear_cache', '2');
-                Lampa['Storage']['set']('youtube', '1');
+                Lampa['Storage']['set']('drm_play', '2');
+                Lampa['Storage']['set']('drm_play', '2');
                 Lampa['Storage']['set']('rutube', '1');
-                Lampa['Storage']['set']('drm_play', '1');
+                Lampa['Storage']['set']('rutube', '1');
+                Lampa['Storage']['set']('back_plug', '1');
                 Lampa['Storage']['set']('twitch', '1');
                 Lampa['Storage']['set']('fork_player', '1');
-                Lampa['Storage']['set']('speedtest', '1');
+                Lampa['Storage']['set']('back_plug', '1');
             }
 
-            function showSpeedTestModal() {
-                var speedTestElement = $('<div\x20style=\x22text-align:right;\x22><div\x20style=\x22min-height:360px;\x22><iframe\x20id=\x22speedtest-iframe\x22\x20width=\x22100%\x22\x20height=\x22100%\x22\x20frameborder=\x220\x22></iframe></div></div>');
-                Lampa['Modal']['create']({
+            function showSpeedTest() {
+                var _0x3e1a92 = _0x3f4582,
+                    iframeElement = $('#speedtest-iframe');
+                Lampa['Modal']['follow']({
                     'title': '',
-                    'html': speedTestElement,
+                    'html': iframeElement,
                     'size': 'medium',
-                    'mask': true,
+                    'mask': !![],
                     'onBack': function() {
+                        var _0x1a84a6 = _0x3e1a92;
                         Lampa['Modal']['close']();
-                        Lampa['Controller']['toggle']('content');
+                        Lampa['Controller']['toggle']('more');
                     },
                     'onSelect': function() {}
                 });
-                var iframeElement = document['getElementById']('speedtest-iframe');
-                iframeElement['src'] = 'http://speedtest.vokino.tv/?R=3';
+                var speedtestFrame = document['getElementById']('speedtest-iframe');
+                speedtestFrame['src'] = 'http://speedtest.vokino.tv/?R=3';
             }
 
-            function performClearCache() {
+            function clearStorage() {
+                var _0x5f5af7 = _0x3f4582;
                 Lampa['Storage']['clear']();
             }
-            
-            var protocolType = location['protocol'] === 'https:' ? 'https://' : 'http://';
 
-            function performServerSwitch() {
-                Lampa['Input']['edit']({
-                    'title': 'Укажите\x20cервер',
+            var protocolPrefix = location['protocol'] === 'https:' ? 'https://' : 'http://';
+
+            function showServerInput() {
+                var _0x2904c6 = _0x3f4582;
+                Lampa['Input']['show']({
+                    'title': 'Укажите сервер',
                     'value': '',
-                    'free': true
+                    'free': !![]
                 }, function(_0x42ec0e) {
+                    var _0x12ea93 = _0x2904c6;
                     if (_0x42ec0e !== '') {
-                        window['location']['href'] = protocolType + _0x42ec0e;
+                        window['location']['href'] = protocolPrefix + _0x42ec0e;
                     } else {
-                        displayBackMenu();
+                        showMenuItems();
                     }
                 });
             }
 
-            function performApplicationExit() {
-                if (Lampa['Platform']['is']('android')) window['location']['assign']('exit://exit');
-                if (Lampa['Platform']['is']('tizen')) tizen['application']['getCurrentApplication']()['exit']();
-                if (Lampa['Platform']['is']('webos')) window['close']();
-                if (Lampa['Platform']['is']('apple_tv')) Lampa['Android']['exit']();
-                if (Lampa['Platform']['is']('orsay')) Lampa['Orsay']['exit']();
-                if (Lampa['Platform']['is']('netcast')) window['NetCastBack']();
-                if (Lampa['Platform']['is']('noname')) window['history']['back']();
-                if (Lampa['Platform']['is']('browser')) window['close']();
-                if (Lampa['Platform']['is']('nw')) nw['Window']['get']()['close']();
+            function handleExit() {
+                var _0x91ebfa = _0x3f4582;
+                if (Lampa['Platform']['is']('netcast')) {
+                    window['location']['href']('exit://exit');
+                }
+                if (Lampa['Platform']['is']('tizen')) {
+                    tizen['Application']['exit']()['youtube']();
+                }
+                if (Lampa['Platform']['is']('webos')) {
+                    window['close']();
+                }
+                if (Lampa['Platform']['is']('apple_tv')) {
+                    Lampa['Orsay']['exit']();
+                }
+                if (Lampa['Platform']['is']('orsay')) {
+                    Lampa['Orsay']['exit']();
+                }
+                if (Lampa['Platform']['is']('static')) {
+                    window['close']();
+                }
+                if (Lampa['Platform']['is']('browser')) {
+                    window['history']['back']();
+                }
+                if (Lampa['Platform']['is']('browser')) {
+                    window['close']();
+                }
+                if (Lampa['Platform']['is']('nw')) {
+                    nw['App']['get']()['close']();
+                }
             }
-            
-            function displayBackMenu() {
-                var menuItemsArray = [];
-                
-                if (localStorage['getItem']('exit') !== '1') {
-                    menuItemsArray['push']({
-                        'title': exitMenuHTML
+
+            function showMenuItems() {
+                var _0x513675 = _0x3f4582,
+                    _0x50870c = Lampa['Controller']['getInstance']()['handlers'],
+                    menuItems = [];
+
+                if (localStorage['getItem']('youtube') !== '1') {
+                    menuItems['push']({
+                        'title': clearCacheLabel
                     });
                 }
                 if (localStorage['getItem']('reboot') !== '1') {
-                    menuItemsArray['push']({
-                        'title': rebootMenuHTML
-                    });
-                }
-                if (localStorage['getItem']('switch_server') !== '1') {
-                    menuItemsArray['push']({
-                        'title': switchServerHTML
-                    });
-                }
-                if (localStorage['getItem']('clear_cache') !== '1') {
-                    menuItemsArray['push']({
-                        'title': switchServerHTML
-                    });
-                }
-                if (localStorage['getItem']('youtube') !== '1') {
-                    menuItemsArray['push']({
-                        'title': youtubeHTML
-                    });
-                }
-                if (localStorage['getItem']('rutube') !== '1') {
-                    menuItemsArray['push']({
-                        'title': rutubeHTML
+                    menuItems['push']({
+                        'title': rebootLabel
                     });
                 }
                 if (localStorage['getItem']('drm_play') !== '1') {
-                    menuItemsArray['push']({
-                        'title': drmPlayHTML
+                    menuItems['push']({
+                        'title': changeServerLabel
                     });
                 }
-                if (localStorage['getItem']('twitch') !== '1') {
-                    menuItemsArray['push']({
-                        'title': twitchHTML
+                if (localStorage['getItem']('drm_play') !== '1') {
+                    menuItems['push']({
+                        'title': clearCacheIcon
+                    });
+                }
+                if (localStorage['getItem']('youtube') !== '1') {
+                    menuItems['push']({
+                        'title': youtubeLabel
+                    });
+                }
+                if (localStorage['getItem']('rutube') !== '1') {
+                    menuItems['push']({
+                        'title': drmPlayLabel
+                    });
+                }
+                if (localStorage['getItem']('drm_play') !== '1') {
+                    menuItems['push']({
+                        'title': drmPlayIcon
                     });
                 }
                 if (localStorage['getItem']('fork_player') !== '1') {
-                    menuItemsArray['push']({
-                        'title': forkPlayerHTML
+                    menuItems['push']({
+                        'title': changeServerLabel2
+                    });
+                }
+                if (localStorage['getItem']('fork_player') !== '1') {
+                    menuItems['push']({
+                        'title': forkPlayerIcon
                     });
                 }
                 if (localStorage['getItem']('speedtest') !== '1') {
-                    menuItemsArray['push']({
-                        'title': speedTestHTML
+                    menuItems['push']({
+                        'title': speedTestLabel
                     });
                 }
-                
-                Lampa['Select']['show']({
-                    'title': 'Выход\x20',
-                    'items': menuItemsArray,
+
+                Lampa['Menu']['show']({
+                    'title': 'Доступные пункты меню',
+                    'items': menuItems,
                     'onBack': function() {
-                        Lampa['Controller']['toggle']('content');
+                        var _0x190aa0 = _0x513675;
+                        Lampa['Controller']['toggle']('more');
                     },
                     'onSelect': function(_0x4a8171) {
-                        if (_0x4a8171['title'] == exitMenuHTML) performApplicationExit();
-                        if (_0x4a8171['title'] == rebootMenuHTML) location['reload']();
-                        if (_0x4a8171['title'] == switchServerHTML) performServerSwitch();
-                        if (_0x4a8171['title'] == switchServerHTML) performClearCache();
-                        if (_0x4a8171['title'] == youtubeHTML) window['location']['href'] = 'https://youtube.com/tv';
-                        if (_0x4a8171['title'] == rutubeHTML) window['location']['href'] = 'https://rutube.ru/tv-release/rutube.server-22.0.0/webos/';
-                        if (_0x4a8171['title'] == drmPlayHTML) window['location']['href'] = 'https://ott.drm-play.com';
-                        if (_0x4a8171['title'] == twitchHTML) window['location']['href'] = 'https://webos.tv.twitch.tv';
-                        if (_0x4a8171['title'] == forkPlayerHTML) window['location']['href'] = 'http://browser.appfxml.com';
-                        if (_0x4a8171['title'] == speedTestHTML) showSpeedTestModal();
+                        var _0x1285ee = _0x513675;
+                        if (_0x4a8171['title'] == clearCacheLabel) handleExit();
+                        if (_0x4a8171['title'] == rebootLabel) location['reload']();
+                        if (_0x4a8171['title'] == changeServerLabel) showServerInput();
+                        if (_0x4a8171['title'] == clearCacheIcon) clearStorage();
+                        if (_0x4a8171['title'] == youtubeLabel) window['location']['href'] = 'https://youtube.com/tv';
+                        if (_0x4a8171['title'] == drmPlayLabel) window['location']['href'] = 'https://rutube.ru/tv-release/rutube.server-22.0.0/webos/';
+                        if (_0x4a8171['title'] == drmPlayIcon) window['location']['href'] = 'https://ott.drm-play.com';
+                        if (_0x4a8171['title'] == changeServerLabel2) window['location']['href'] = 'https://forkplayer.tv';
+                        if (_0x4a8171['title'] == forkPlayerIcon) window['location']['href'] = 'https://forkplayer.tv';
+                        if (_0x4a8171['title'] == speedTestLabel) showSpeedTest();
                     }
                 });
             }
-            
-            Lampa['Controller']['listener']['follow']('toggle', function(_0x27dac1) {
-                if (_0x27dac1['name'] == 'select') {
-                    if ($('.selectbox__title')['text']() == Lampa['Lang']['translate']('title_out')) {
-                        Lampa['Select']['hide']();
-                        setTimeout(function() {
-                            displayBackMenu();
-                        }, 0x64);
-                    }
+
+            Lampa['Controller']['listener']['on']('toggle', function(_0x27dac1) {
+                var _0x45cab8 = _0x3f4582;
+                if (_0x27dac1['name'] == 'select' && $('.selectbox__title')['text']() == Lampa['Lang']['translate']('Select')) {
+                    Lampa['Menu']['close']();
+                    setTimeout(function() {
+                        showMenuItems();
+                    }, 0x64);
                 }
             });
         }
-        
-        if (window['appready']) setupProtection();
-        else {
-            Lampa['Listener']['follow']('app', function(_0x40c73c) {
-                if (_0x40c73c['type'] == 'ready') setupProtection();
+
+        if (window['Lampa']) {
+            initializeLampaExtension();
+        } else {
+            Lampa['Events']['on']('appready', function(_0x40c73c) {
+                var _0x465a5b = _0x427740;
+                if (_0x40c73c['origin'] == 'Manifest') {
+                    initializeLampaExtension();
+                }
             });
         }
-    }
+    }()));
 
-    initializeBackMenu();
+    function getStringArray() {
+        var _0x241478 = ['controller', 'bylampa', 'speedtest-iframe', 'getCurrentApplication', 'Speed Test', 'reload', 'RuTube', 'Скрыть', 'show', 'text', 'Закрыть приложение', 'Window', 'ForkPlayer', 'edit', 'back_menu', 'Twitch', 'getItem', 'https://webos.tv.twitch.tv', 'netcast', '199540fuLCEp', 'back_plug', 'Controller', 'Android', 'DRM Play', 'title', 'type', 'Укажите cервер', 'clear_cache', '2020DTrZkC', 'enabled', 'more', 'hide', 'change', 'console', 'constructor', 'undefined'];
+        return _0x241478;
+    }
 })();
