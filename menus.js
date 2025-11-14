@@ -1,3 +1,5 @@
+(function() {
+‘use strict’;
 Lampa.Platform.tv();
 
 (function() {
@@ -395,4 +397,5 @@ Lampa.Platform.tv();
     else Lampa['Listener']['follow']('app', function(event) {
         if (event['type'] == 'ready') initPlugin();
     });
+}());
 }());
