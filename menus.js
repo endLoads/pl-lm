@@ -1,9 +1,7 @@
 (function() {
-‘use strict’;
-Lampa.Platform.tv();
-
-(function() {
     'use strict';
+
+Lampa.Platform.tv();
 
     function initPlugin() {
         var antiDebug1 = (function() {
@@ -397,5 +395,4 @@ Lampa.Platform.tv();
     else Lampa['Listener']['follow']('app', function(event) {
         if (event['type'] == 'ready') initPlugin();
     });
-}());
 }());
