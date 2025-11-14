@@ -1,41 +1,51 @@
 (function () {
   "use strict";
+
   Lampa.Platform.tv();
+
   (function () {
     var seiry = function () {
       var tersa = true;
       return function (kyrae, dnaiel) {
-        var tabaitha = tersa ? function () {
-          if (dnaiel) {
-            var jru = dnaiel.apply(kyrae, arguments);
-            dnaiel = null;
-            return jru;
-          }
-        } : function () {};
+        var tabaitha = tersa
+          ? function () {
+              if (dnaiel) {
+                var jru = dnaiel.apply(kyrae, arguments);
+                dnaiel = null;
+                return jru;
+              }
+            }
+          : function () {};
         tersa = false;
         return tabaitha;
       };
     }();
+
     "use strict";
+
     function vel() {
+      // Проверка легальности окружения, как в оригинале
       if (Lampa.Manifest.origin !== "bylampa") {
         Lampa.Noty.show("Ошибка доступа");
         return;
       }
 
-      var backMenuVisibilityValues = {1: \"Скрыть\", 2: \"Отобразить\"};
+      // Конфиг для пунктов меню выхода
+      var backMenuVisibilityValues = {1: "Скрыть", 2: "Отобразить"};
       var backMenuItems = [
-        {name: \"exit\",          defaultValue: \"2\", title: \"Закрыть приложение\"},
-        {name: \"reboot\",        defaultValue: \"2\", title: \"Перезагрузить\"},
-        {name: \"switch_server\", defaultValue: \"2\", title: \"Сменить сервер\"},
-        {name: \"clear_cache\",   defaultValue: \"2\", title: \"Очистить кэш\"},
-        {name: \"youtube\",       defaultValue: \"1\", title: \"YouTube\"},
-        {name: \"rutube\",        defaultValue: \"1\", title: \"RuTube\"},
-        {name: \"drm_play\",      defaultValue: \"1\", title: \"DRM Play\"},
-        {name: \"twitch\",        defaultValue: \"1\", title: \"Twitch\"},
-        {name: \"fork_player\",   defaultValue: \"1\", title: \"ForkPlayer\"},
-        {name: \"speedtest\",     defaultValue: \"1\", title: \"Speed Test\"}
+        {name: "exit",          defaultValue: "2", title: "Закрыть приложение"},
+        {name: "reboot",        defaultValue: "2", title: "Перезагрузить"},
+        {name: "switch_server", defaultValue: "2", title: "Сменить сервер"},
+        {name: "clear_cache",   defaultValue: "2", title: "Очистить кэш"},
+        {name: "youtube",       defaultValue: "1", title: "YouTube"},
+        {name: "rutube",        defaultValue: "1", title: "RuTube"},
+        {name: "drm_play",      defaultValue: "1", title: "DRM Play"},
+        {name: "twitch",        defaultValue: "1", title: "Twitch"},
+        {name: "fork_player",   defaultValue: "1", title: "ForkPlayer"},
+        {name: "speedtest",     defaultValue: "1", title: "Speed Test"}
       ];
+
+      // Слушатель открытия настроек — добавляем компонент back_menu
       Lampa.Settings.listener.follow("open", function (tatevik) {
         if (tatevik.name == "main") {
           Lampa.SettingsApi.addComponent({component: "back_menu", name: "BackMenu"});
@@ -45,14 +55,26 @@
           }, 0);
         }
       });
-      Lampa.SettingsApi.addParam({component: "more", param: {name: "back_menu", type: "static", default: true}, field: {name: "Меню Выход", description: "Настройки отображения пунктов меню"}, onRender: function (shivin) {
-        shivin.on("hover:enter", function () {
-          Lampa.Settings.create("back_menu");
-          Lampa.Controller.enabled().controller.back = function () {
-            Lampa.Settings.create("more");
-          };
-        });
-      }});
+
+      // Пункт «Меню Выход» в разделе «Остальное»
+      Lampa.SettingsApi.addParam({
+        component: "more",
+        param: {name: "back_menu", type: "static", default: true},
+        field: {
+          name: "Меню Выход",
+          description: "Настройки отображения пунктов меню"
+        },
+        onRender: function (shivin) {
+          shivin.on("hover:enter", function () {
+            Lampa.Settings.create("back_menu");
+            Lampa.Controller.enabled().controller.back = function () {
+              Lampa.Settings.create("more");
+            };
+          });
+        }
+      });
+
+      // Все параметры back_menu через один цикл (DRY)
       backMenuItems.forEach(function (item) {
         Lampa.SettingsApi.addParam({
           component: "back_menu",
@@ -68,6 +90,8 @@
           }
         });
       });
+
+      // Инициализация значений по умолчанию
       var initBackMenuInterval = setInterval(function () {
         if (typeof Lampa !== "undefined") {
           clearInterval(initBackMenuInterval);
@@ -76,6 +100,7 @@
           }
         }
       }, 200);
+
       function shimya() {
         var defaults = {
           back_plug: true,
