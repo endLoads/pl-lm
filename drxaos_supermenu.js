@@ -116,7 +116,7 @@
     function log() {
       if (!SuperMenuConfig.DEBUG && !SuperMenuConfig.VERBOSE_LOGGING) return;
       try {
-        console.log.apply(console, ["[SuperMenu]"].concat([].slice.call(arguments)));
+        console.log.apply(console, ["[SuperMenu]"].concat(Array.prototype.slice.call(arguments)));
       } catch (e) {}
     }
 
@@ -352,8 +352,8 @@
         };
 
         Object.keys(defaults).forEach(function (key) {
-          if (!localStorage.getItem(key)) {
-            localStorage.setItem(key, defaults[key]);
+          if (!Lampa.Storage.get(key)) {
+            Lampa.Storage.set(key, defaults[key]);
           }
         });
       } catch (e) {
@@ -367,19 +367,27 @@
           window.location.assign("exit://exit");
         }
         if (Lampa.Platform.is("tizen")) {
-          tizen.application.getCurrentApplication().exit();
+          if (typeof tizen !== 'undefined' && tizen.application) {
+            tizen.application.getCurrentApplication().exit();
+          }
         }
         if (Lampa.Platform.is("webos")) {
           window.close();
         }
         if (Lampa.Platform.is("android")) {
-          Lampa.Android.exit();
+          if (Lampa.Android && Lampa.Android.exit) {
+            Lampa.Android.exit();
+          }
         }
         if (Lampa.Platform.is("orsay")) {
-          Lampa.Orsay.exit();
+          if (Lampa.Orsay && Lampa.Orsay.exit) {
+            Lampa.Orsay.exit();
+          }
         }
         if (Lampa.Platform.is("netcast")) {
-          window.NetCastBack();
+          if (typeof window.NetCastBack === 'function') {
+            window.NetCastBack();
+          }
         }
         if (Lampa.Platform.is("noname")) {
           window.history.back();
@@ -388,7 +396,9 @@
           window.close();
         }
         if (Lampa.Platform.is("nw")) {
-          nw.Window.get().close();
+          if (typeof nw !== 'undefined' && nw.Window) {
+            nw.Window.get().close();
+          }
         }
       } catch (e) {
         log("exitMenuSeason error:", e);
@@ -397,9 +407,21 @@
 
     function exitMenuSpeedTest() {
       try {
-        var wrapper = $(
-          '<div style="text-align:right;"><div style="min-height:360px;"><iframe id="speedtest-iframe" width="100%" height="100%" frameborder="0"></iframe></div></div>'
-        );
+        var wrapper = document.createElement('div');
+        wrapper.style.textAlign = 'right';
+        
+        var container = document.createElement('div');
+        container.style.minHeight = '360px';
+        
+        var iframe = document.createElement('iframe');
+        iframe.id = 'speedtest-iframe';
+        iframe.width = '100%';
+        iframe.height = '100%';
+        iframe.frameBorder = '0';
+        
+        container.appendChild(iframe);
+        wrapper.appendChild(container);
+        
         Lampa.Modal.open({
           title: "",
           html: wrapper,
@@ -411,8 +433,8 @@
           },
           onSelect: function () {}
         });
-        var iframe = document.getElementById("speedtest-iframe");
-        if (iframe) iframe.src = "http://speedtest.vokino.tv/?R=3";
+        
+        iframe.src = "http://speedtest.vokino.tv/?R=3";
       } catch (e) {
         log("exitMenuSpeedTest error:", e);
       }
@@ -589,43 +611,43 @@
     function exitMenuBuildItems() {
       var items = [];
 
-      if (localStorage.getItem("exit") !== "1") {
+      if (Lampa.Storage.get("exit") !== "1") {
         items.push({ id: "exit", title: exitMenuIconHtml("exit") });
       }
-      if (localStorage.getItem("reboot") !== "1") {
+      if (Lampa.Storage.get("reboot") !== "1") {
         items.push({ id: "reboot", title: exitMenuIconHtml("reboot") });
       }
-      if (localStorage.getItem("switch_server") !== "1") {
+      if (Lampa.Storage.get("switch_server") !== "1") {
         items.push({
           id: "switch_server",
           title: exitMenuIconHtml("switch_server")
         });
       }
-      if (localStorage.getItem("clear_cache") !== "1") {
+      if (Lampa.Storage.get("clear_cache") !== "1") {
         items.push({
           id: "clear_cache",
           title: exitMenuIconHtml("clear_cache")
         });
       }
-      if (localStorage.getItem("youtube") !== "1") {
+      if (Lampa.Storage.get("youtube") !== "1") {
         items.push({ id: "youtube", title: exitMenuIconHtml("youtube") });
       }
-      if (localStorage.getItem("rutube") !== "1") {
+      if (Lampa.Storage.get("rutube") !== "1") {
         items.push({ id: "rutube", title: exitMenuIconHtml("rutube") });
       }
-      if (localStorage.getItem("drm_play") !== "1") {
+      if (Lampa.Storage.get("drm_play") !== "1") {
         items.push({ id: "drm_play", title: exitMenuIconHtml("drm_play") });
       }
-      if (localStorage.getItem("twitch") !== "1") {
+      if (Lampa.Storage.get("twitch") !== "1") {
         items.push({ id: "twitch", title: exitMenuIconHtml("twitch") });
       }
-      if (localStorage.getItem("fork_player") !== "1") {
+      if (Lampa.Storage.get("fork_player") !== "1") {
         items.push({
           id: "fork_player",
           title: exitMenuIconHtml("fork_player")
         });
       }
-      if (localStorage.getItem("speedtest") !== "1") {
+      if (Lampa.Storage.get("speedtest") !== "1") {
         items.push({
           id: "speedtest",
           title: exitMenuIconHtml("speedtest")
@@ -788,7 +810,7 @@
         if (
           Lampa.Controller &&
           Lampa.Controller.listener &&
-          Lampa.Controller.listener.follow
+          typeof Lampa.Controller.listener.follow === 'function'
         ) {
           Lampa.Controller.listener.follow("toggle", function () {
             try {
@@ -927,164 +949,10 @@
 
     // === НАСТРОЙКИ ПЛАГИНА В LAMPA ===
 
-
-    // === ОБРАБОТКА КАРТОЧЕК И ПРИМЕНЕНИЕ СТИЛЕЙ ===
-
-    var cardProcessingQueue = [];
-    var isProcessingCards = false;
-
-    function processCardQueue() {
-      if (isProcessingCards || cardProcessingQueue.length === 0) return;
-
-      isProcessingCards = true;
-      var batch = cardProcessingQueue.splice(0, 10); // обрабатываем по 10 карточек
-
-      batch.forEach(function(card) {
-        try {
-          applyStylesToCard(card);
-        } catch (e) {
-          log("Error processing card:", e);
-        }
-      });
-
-      isProcessingCards = false;
-
-      if (cardProcessingQueue.length > 0) {
-        setTimeout(processCardQueue, 50);
-      }
-    }
-
-    function applyStylesToCard(card) {
-      if (!card || card.dataset.drxProcessed === "true") return;
-
-      try {
-        // Получаем метаданные карточки
-        var meta = extractCardMetadata(card);
-
-        // Применяем цветные метки
-        if (SuperMenuConfig.FEATURES.label_colors && meta) {
-          colorizeLabelsInContainer(card, meta);
-        }
-
-        // Помечаем как обработанную
-        card.dataset.drxProcessed = "true";
-      } catch (e) {
-        log("applyStylesToCard error:", e);
-      }
-    }
-
-    function extractCardMetadata(card) {
-      try {
-        var meta = {
-          type: null,
-          quality: null,
-          title: null
-        };
-
-        // Определяем тип (movie/tv)
-        if (card.classList.contains("card--tv")) {
-          meta.type = "tv";
-        } else if (card.classList.contains("card--movie")) {
-          meta.type = "movie";
-        }
-
-        // Ищем качество
-        var qualityEl = card.querySelector(".card__quality, .card-quality");
-        if (qualityEl) {
-          meta.quality = qualityEl.textContent.trim();
-        }
-
-        // Ищем название
-        var titleEl = card.querySelector(".card__title, .card-title");
-        if (titleEl) {
-          meta.title = titleEl.textContent.trim();
-        }
-
-        return meta;
-      } catch (e) {
-        return null;
-      }
-    }
-
-    // === MUTATION OBSERVER ДЛЯ ОТСЛЕЖИВАНИЯ НОВЫХ КАРТОЧЕК ===
-
-    var cardObserver = null;
-
-    function startCardObserver() {
-      if (cardObserver) return;
-
-      try {
-        cardObserver = new MutationObserver(
-          throttle(function(mutations) {
-            var newCards = [];
-
-            mutations.forEach(function(mutation) {
-              if (mutation.addedNodes && mutation.addedNodes.length) {
-                mutation.addedNodes.forEach(function(node) {
-                  if (node.nodeType === 1) {
-                    // Если это сама карточка
-                    if (node.classList && node.classList.contains("card")) {
-                      newCards.push(node);
-                    }
-                    // Или ищем карточки внутри добавленного узла
-                    if (node.querySelectorAll) {
-                      var cards = node.querySelectorAll(".card");
-                      cards.forEach(function(c) { newCards.push(c); });
-                    }
-                  }
-                });
-              }
-            });
-
-            if (newCards.length > 0) {
-              newCards.forEach(function(card) {
-                if (cardProcessingQueue.indexOf(card) === -1) {
-                  cardProcessingQueue.push(card);
-                }
-              });
-              processCardQueue();
-            }
-          }, SuperMenuConfig.PERFORMANCE.MUTATION_THROTTLE)
-        );
-
-        cardObserver.observe(document.body, {
-          childList: true,
-          subtree: true
-        });
-
-        log("Card observer started");
-      } catch (e) {
-        log("startCardObserver error:", e);
-      }
-    }
-
-    function stopCardObserver() {
-      if (cardObserver) {
-        cardObserver.disconnect();
-        cardObserver = null;
-        log("Card observer stopped");
-      }
-    }
-
-    // === ОБРАБОТКА СУЩЕСТВУЮЩИХ КАРТОЧЕК ПРИ ЗАГРУЗКЕ ===
-
-    function processExistingCards() {
-      try {
-        var cards = document.querySelectorAll(".card");
-        log("Found " + cards.length + " existing cards to process");
-
-        cards.forEach(function(card) {
-          cardProcessingQueue.push(card);
-        });
-
-        processCardQueue();
-      } catch (e) {
-        log("processExistingCards error:", e);
-      }
-    }
-
     function registerSettings() {
       try {
+        if (!Lampa.SettingsApi) return;
+
         // MADNESS on/off
         Lampa.SettingsApi.addParam({
           component: "more",
@@ -1268,93 +1136,61 @@
 
     function applyUserSettings() {
       try {
-        var madness =
-          Lampa.Storage.get(
-            "drxaos_supermenu_madness",
-            SuperMenuConfig.FEATURES.madness ? "true" : "false"
-          ) === "true";
+        var madness = Lampa.Storage.field("drxaos_supermenu_madness");
+        if (madness !== undefined) {
+          SuperMenuConfig.FEATURES.madness = madness;
+        }
 
-        var perfMode = Lampa.Storage.get(
-          "drxaos_supermenu_perf_mode",
-          SuperMenuConfig.PLATFORM.isAndroid ? "android_perf" : "normal"
-        );
+        var perfMode = Lampa.Storage.field("drxaos_supermenu_perf_mode");
+        
+        var ratingsTmdb = Lampa.Storage.field("drxaos_supermenu_ratings_tmdb");
+        if (ratingsTmdb !== undefined) {
+          SuperMenuConfig.FEATURES.ratings_tmdb = ratingsTmdb;
+        }
 
-        var ratingsTmdb =
-          Lampa.Storage.get(
-            "drxaos_supermenu_ratings_tmdb",
-            SuperMenuConfig.FEATURES.ratings_tmdb ? "true" : "false"
-          ) === "true";
+        var ratingsImdb = Lampa.Storage.field("drxaos_supermenu_ratings_imdb");
+        if (ratingsImdb !== undefined) {
+          SuperMenuConfig.FEATURES.ratings_imdb = ratingsImdb;
+        }
 
-        var ratingsImdb =
-          Lampa.Storage.get(
-            "drxaos_supermenu_ratings_imdb",
-            SuperMenuConfig.FEATURES.ratings_imdb ? "true" : "false"
-          ) === "true";
+        var ratingsKp = Lampa.Storage.field("drxaos_supermenu_ratings_kp");
+        if (ratingsKp !== undefined) {
+          SuperMenuConfig.FEATURES.ratings_kp = ratingsKp;
+        }
 
-        var ratingsKp =
-          Lampa.Storage.get(
-            "drxaos_supermenu_ratings_kp",
-            SuperMenuConfig.FEATURES.ratings_kp ? "true" : "false"
-          ) === "true";
+        var labelColors = Lampa.Storage.field("drxaos_supermenu_label_colors");
+        if (labelColors !== undefined) {
+          SuperMenuConfig.FEATURES.label_colors = labelColors;
+        }
 
-        var labelColors =
-          Lampa.Storage.get(
-            "drxaos_supermenu_label_colors",
-            SuperMenuConfig.FEATURES.label_colors ? "true" : "false"
-          ) === "true";
-
-        var labelScheme = Lampa.Storage.get(
-          "drxaos_supermenu_label_scheme",
-          SuperMenuConfig.LABEL_SCHEME
-        );
-
-        var topbarExit =
-          Lampa.Storage.get(
-            "drxaos_supermenu_topbar_exit",
-            SuperMenuConfig.FEATURES.topbar_exit_menu ? "true" : "false"
-          ) === "true";
-
-        var madnessLevel = Lampa.Storage.get(
-          "drxaos_supermenu_madness_level",
-          SuperMenuConfig.FEATURES.madness_level || "normal"
-        );
-
-        var borderlessTheme =
-          Lampa.Storage.get(
-            "drxaos_supermenu_borderless_dark",
-            SuperMenuConfig.FEATURES.borderless_dark_theme
-              ? "true"
-              : "false"
-          ) === "true";
-
-        var voiceoverTracking =
-          Lampa.Storage.get(
-            "drxaos_supermenu_voiceover_tracking",
-            SuperMenuConfig.FEATURES.voiceover_tracking
-              ? "true"
-              : "false"
-          ) === "true";
-
-        SuperMenuConfig.FEATURES.madness = madness;
-        SuperMenuConfig.FEATURES.ratings_tmdb = ratingsTmdb;
-        SuperMenuConfig.FEATURES.ratings_imdb = ratingsImdb;
-        SuperMenuConfig.FEATURES.ratings_kp = ratingsKp;
-        SuperMenuConfig.FEATURES.label_colors = labelColors;
-        SuperMenuConfig.FEATURES.topbar_exit_menu = topbarExit;
-        SuperMenuConfig.FEATURES.borderless_dark_theme = borderlessTheme;
-        SuperMenuConfig.FEATURES.voiceover_tracking = voiceoverTracking;
-        SuperMenuConfig.VOICEOVER.enabled = voiceoverTracking;
-
+        var labelScheme = Lampa.Storage.field("drxaos_supermenu_label_scheme");
         if (labelScheme === "vivid" || labelScheme === "soft") {
           SuperMenuConfig.LABEL_SCHEME = labelScheme;
         }
 
+        var topbarExit = Lampa.Storage.field("drxaos_supermenu_topbar_exit");
+        if (topbarExit !== undefined) {
+          SuperMenuConfig.FEATURES.topbar_exit_menu = topbarExit;
+        }
+
+        var madnessLevel = Lampa.Storage.field("drxaos_supermenu_madness_level");
         if (
           madnessLevel === "off" ||
           madnessLevel === "normal" ||
           madnessLevel === "full"
         ) {
           SuperMenuConfig.FEATURES.madness_level = madnessLevel;
+        }
+
+        var borderlessTheme = Lampa.Storage.field("drxaos_supermenu_borderless_dark");
+        if (borderlessTheme !== undefined) {
+          SuperMenuConfig.FEATURES.borderless_dark_theme = borderlessTheme;
+        }
+
+        var voiceoverTracking = Lampa.Storage.field("drxaos_supermenu_voiceover_tracking");
+        if (voiceoverTracking !== undefined) {
+          SuperMenuConfig.FEATURES.voiceover_tracking = voiceoverTracking;
+          SuperMenuConfig.VOICEOVER.enabled = voiceoverTracking;
         }
 
         if (perfMode === "android_perf") {
@@ -1375,21 +1211,34 @@
       try {
         if (!SuperMenuConfig.FEATURES.topbar_exit_menu) return;
 
-        if (Lampa && Lampa.Panel && Lampa.Panel.add) {
-          Lampa.Panel.add({
-            name: "drxaos_supermenu_exit",
-            title: "Меню выхода",
-            icon:
-              '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-              '<path d="M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-              '<path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-              "</svg>",
-            onClick: function () {
-              exitMenuOpen();
+        var buttonAdded = false;
+
+        // Попытка добавить через официальное API
+        if (Lampa.Activity && Lampa.Activity.active && typeof Lampa.Activity.active === 'function') {
+          var activity = Lampa.Activity.active();
+          if (activity && activity.header && activity.header.find) {
+            var head_actions = activity.header.find('.head__actions');
+            
+            if (head_actions && head_actions.length && !document.querySelector('.drxaos-exit-button')) {
+              var exitButton = document.createElement('div');
+              exitButton.className = 'head__action head__settings drxaos-exit-button selector';
+              exitButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+                '<path d="M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
+                '<path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
+                '</svg>';
+              
+              exitButton.addEventListener('click', function() {
+                exitMenuOpen();
+              });
+              
+              head_actions[0].appendChild(exitButton);
+              buttonAdded = true;
             }
-          });
-        } else {
-          log("Panel API недоступен, кнопка верхней панели не будет добавлена");
+          }
+        }
+
+        if (!buttonAdded) {
+          log("Не удалось добавить кнопку выхода в верхнюю панель");
         }
       } catch (e) {
         log("registerTopBarButton error:", e);
@@ -1439,24 +1288,19 @@
     registerSettings();
     applyUserSettings();
     injectBorderlessDarkTheme();
-    registerTopBarButton();
-    initMadnessSectionHooks();
-
-
-
-    // Запускаем наблюдение за карточками
-    startCardObserver();
-
-    // Обрабатываем уже существующие карточки
+    
+    // Откладываем добавление кнопки
     setTimeout(function() {
-      processExistingCards();
+      registerTopBarButton();
     }, 1000);
+    
+    initMadnessSectionHooks();
 
     try {
       if (
         Lampa.Storage &&
         Lampa.Storage.listener &&
-        Lampa.Storage.listener.follow
+        typeof Lampa.Storage.listener.follow === 'function'
       ) {
         Lampa.Storage.listener.follow("change", onSettingsChanged);
       }
@@ -1467,25 +1311,28 @@
 
   // === ЗАПУСК ПЛАГИНА ===
   function bootstrapSuperMenu() {
-  try {
-    if (typeof Lampa === "undefined") return;
+    try {
+      if (typeof Lampa === "undefined") return;
 
-    if (window.appready) {
-      // Приложение уже готово — просто запускаем init()
-      init();
-    } else if (Lampa.Listener && typeof Lampa.Listener.follow === "function") {
-      // Ждём события ready от приложения
-      Lampa.Listener.follow("app", function (e) {
-        try {
-          if (e.type === "ready") init();
-        } catch (err) {
-          log("SuperMenu init on app:ready error:", err);
-        }
-      });
+      if (window.appready) {
+        // Приложение уже готово — просто запускаем init()
+        init();
+      } else if (Lampa.Listener && typeof Lampa.Listener.follow === "function") {
+        // Ждём события ready от приложения
+        Lampa.Listener.follow("app", function (e) {
+          try {
+            if (e.type === "ready") init();
+          } catch (err) {
+            console.log("SuperMenu init on app:ready error:", err);
+          }
+        });
+      } else {
+        // Запускаем через таймаут если нет листенеров
+        setTimeout(init, 1000);
+      }
+    } catch (e) {
+      console.log("bootstrapSuperMenu error:", e);
     }
-  } catch (e) {
-    log("bootstrapSuperMenu error:", e);
-  }
   }
 
   // Ждём появления Lampa, если плагин подцепился слишком рано
