@@ -616,6 +616,25 @@
           }
         });
 
+        // Выбор цветовой схемы меток
+        Lampa.SettingsApi.addParam({
+          component: "more",
+          param: {
+            name: "drxaos_supermenu_label_scheme",
+            type: "select",
+            values: {
+              vivid: "Яркая схема",
+              soft:  "Мягкая схема"
+            },
+            default: SuperMenuConfig.LABEL_SCHEME
+          },
+          field: {
+            name: "Цветовая схема меток",
+            description: "Выбор палитры для меток качества и типа контента"
+          }
+        });
+
+
         // Включение/выключение интеграции меню выхода в верхнюю панель
         Lampa.SettingsApi.addParam({
           component: "more",
@@ -675,6 +694,7 @@
         var ratingsKp = Lampa.Storage.get("drxaos_supermenu_ratings_kp", SuperMenuConfig.FEATURES.ratings_kp ? "true" : "false") === "true";
         var labelColors = Lampa.Storage.get("drxaos_supermenu_label_colors", SuperMenuConfig.FEATURES.label_colors ? "true" : "false") === "true";
         var topbarExit = Lampa.Storage.get("drxaos_supermenu_topbar_exit", SuperMenuConfig.FEATURES.topbar_exit_menu ? "true" : "false") === "true";
+        var labelScheme = Lampa.Storage.get("drxaos_supermenu_label_scheme", SuperMenuConfig.LABEL_SCHEME);
 
         SuperMenuConfig.FEATURES.madness = madness;
         SuperMenuConfig.FEATURES.ratings_tmdb = ratingsTmdb;
@@ -682,6 +702,10 @@
         SuperMenuConfig.FEATURES.ratings_kp = ratingsKp;
         SuperMenuConfig.FEATURES.label_colors = labelColors;
         SuperMenuConfig.FEATURES.topbar_exit_menu = topbarExit;
+
+        if (labelScheme === "vivid" || labelScheme === "soft") {
+          SuperMenuConfig.LABEL_SCHEME = labelScheme;
+        }
 
         if (perfMode === "android_perf") {
           SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY = 500;
@@ -694,6 +718,55 @@
         log("Ошибка при применении пользовательских настроек:", e);
       }
     }
+
+        // Получить текущий набор цветов для меток
+    function getCurrentLabelColors() {
+      var scheme = SuperMenuConfig.LABEL_SCHEME;
+      var all = SuperMenuConfig.LABEL_COLORS || {};
+      return all[scheme] || all.vivid || { TYPE: {}, QUALITY: {} };
+    }
+
+    /**
+     * Раскраска меток качества и типа внутри контейнера.
+     * container — DOM-элемент карточки или блока,
+     * meta — объект с полями { type: 'movie'|'tv'|'anime'..., quality: '4K'|'1080p'|... }.
+     *
+     * Эту функцию нужно вызывать из твоего drxaos_themes.js там, где уже есть информация о карточке.
+     */
+    function colorizeLabelsInContainer(container, meta) {
+      try {
+        if (!SuperMenuConfig.FEATURES.label_colors) return;
+        if (!container || !meta) return;
+
+        var colors = getCurrentLabelColors();
+
+        // По умолчанию ищем элементы по классам, их можно скорректировать под твою верстку.
+        var typeEl = container.querySelector(".drx-label-type, .card-type, .type-label");
+        var qualityEl = container.querySelector(".drx-label-quality, .card-quality, .quality-label");
+
+        if (typeEl && meta.type) {
+          var tColor = colors.TYPE[meta.type];
+          if (tColor) typeEl.style.color = tColor;
+        }
+
+        if (qualityEl && meta.quality) {
+          var q = meta.quality;
+          // Нормализуем часто встречающиеся варианты
+          if (/2160|4k/i.test(q)) q = "4K";
+          else if (/1080/i.test(q)) q = "1080p";
+          else if (/720/i.test(q)) q = "720p";
+          else if (/cam/i.test(q)) q = "CAM";
+          else if (/hdr/i.test(q)) q = "HDR";
+          else if (/sd/i.test(q)) q = "SD";
+
+          var qColor = colors.QUALITY[q];
+          if (qColor) qualityEl.style.color = qColor;
+        }
+      } catch (e) {
+        log("Ошибка в colorizeLabelsInContainer:", e);
+      }
+    }
+
 
     // Регистрируем настройки и верхнюю кнопку
     registerSettings();
