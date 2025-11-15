@@ -88,14 +88,20 @@
       // Включение/выключение подсистем
       FEATURES: {
         madness: true,
+        madness_level: "normal", // off | normal | full
+
         ratings_tmdb: true,
         ratings_imdb: true,
         ratings_kp: true,
         ratings_other: false,
+
         label_colors: true,
         voiceover_tracking: false,
-        topbar_exit_menu: true
+        topbar_exit_menu: true,
+
+        borderless_dark_theme: false // новая тема без рамок
       }
+
     };
 
 
@@ -303,6 +309,122 @@
       } catch (e) {
         log("getKpRating error:", e);
         cb && cb(null);
+      }
+    }
+
+    // === ТЁМНАЯ ТЕМА БЕЗ РАМок ===
+    var injectedBorderlessStyle = null;
+
+    function injectBorderlessDarkTheme() {
+      try {
+        if (!SuperMenuConfig.FEATURES.borderless_dark_theme) {
+          if (injectedBorderlessStyle && injectedBorderlessStyle.parentNode) {
+            injectedBorderlessStyle.parentNode.removeChild(injectedBorderlessStyle);
+            injectedBorderlessStyle = null;
+          }
+          return;
+        }
+
+        if (injectedBorderlessStyle) return; // уже вставлено
+
+        var css =
+          "body { background-color: #05070A !important; color: #ECEFF4 !important; }" +
+          ".card, .card--collection, .card-w { " +
+          "  border: none !important;" +
+          "  box-shadow: 0 14px 40px rgba(0,0,0,0.75) !important;" +
+          "  background: radial-gradient(circle at top, #1B1F27 0, #0B0F16 55%, #05070A 100%) !important;" +
+          "}" +
+          ".card__view, .card__title, .card__age, .card__tags { " +
+          "  text-shadow: 0 0 4px rgba(0,0,0,0.9) !important;" +
+          "}" +
+          ".drx-kp-badge, .cardvote { " +
+          "  text-shadow: 0 0 4px rgba(0,0,0,0.95) !important;" +
+          "}" +
+          ".head, .head__title, .simple-title, .section__title { " +
+          "  background: transparent !important;" +
+          "  color: #ECEFF4 !important;" +
+          "  text-shadow: 0 0 8px rgba(0,0,0,0.9) !important;" +
+          "}";
+
+        injectedBorderlessStyle = document.createElement("style");
+        injectedBorderlessStyle.type = "text/css";
+        injectedBorderlessStyle.className = "drx-borderless-dark-theme";
+        injectedBorderlessStyle.appendChild(document.createTextNode(css));
+
+        document.head.appendChild(injectedBorderlessStyle);
+      } catch (e) {
+        log("injectBorderlessDarkTheme error:", e);
+      }
+    }
+
+
+    // === MADNESS: оформление заголовков разделов без порчи оригинала ===
+
+    function madnessDecorateSectionTitle(element) {
+      try {
+        if (!SuperMenuConfig.FEATURES.madness) return;
+        if (SuperMenuConfig.FEATURES.madness_level === "off") return;
+        if (!element) return;
+
+        // Сохраняем оригинальный текст один раз
+        if (!element.dataset.drxOriginalTitle) {
+          element.dataset.drxOriginalTitle = element.textContent || "";
+        }
+
+        var original = element.dataset.drxOriginalTitle || "";
+        var level = SuperMenuConfig.FEATURES.madness_level;
+
+        // Чистим от прошлых украшательств
+        element.innerHTML = "";
+        var baseSpan = document.createElement("span");
+        baseSpan.className = "drx-section-title-base";
+        baseSpan.textContent = original;
+
+        element.appendChild(baseSpan);
+
+        if (level === "normal" || level === "full") {
+          var badge = document.createElement("span");
+          badge.className = "drx-section-title-madness";
+          badge.textContent = " ✦ MADNESS";
+          badge.style.marginLeft = "0.35em";
+          badge.style.fontSize = "0.8em";
+          badge.style.opacity = "0.8";
+
+          element.appendChild(badge);
+        }
+
+        if (level === "full") {
+          element.style.letterSpacing = "0.03em";
+          element.style.textShadow = "0 0 6px rgba(0,0,0,0.85)";
+        } else {
+          element.style.letterSpacing = "";
+          element.style.textShadow = "";
+        }
+      } catch (e) {
+        log("madnessDecorateSectionTitle error:", e);
+      }
+    }
+
+    function initMadnessSectionHooks() {
+      try {
+        if (!SuperMenuConfig.FEATURES.madness) return;
+
+        // Хук на переключение контроллеров (меню / разделы)
+        if (Lampa.Controller && Lampa.Controller.listener && Lampa.Controller.listener.follow) {
+          Lampa.Controller.listener.follow("toggle", function (data) {
+            try {
+              // Ищем контейнер с заголовком текущего раздела
+              var titleEl = document.querySelector(".head .head__title, .simple-title, .section__title");
+              if (!titleEl) return;
+
+              madnessDecorateSectionTitle(titleEl);
+            } catch (e) {
+              log("Madness toggle hook error:", e);
+            }
+          });
+        }
+      } catch (e) {
+        log("initMadnessSectionHooks error:", e);
       }
     }
 
@@ -719,6 +841,40 @@
           }
         });
 
+        // Уровень MADNESS
+        Lampa.SettingsApi.addParam({
+          component: "more",
+          param: {
+            name: "drxaos_supermenu_madness_level",
+            type: "select",
+            values: {
+              off:    "Выключен",
+              normal: "Стандартный",
+              full:   "Полный"
+            },
+            default: SuperMenuConfig.FEATURES.madness_level
+          },
+          field: {
+            name: "Уровень MADNESS",
+            description: "Насколько агрессивно модифицировать интерфейс"
+          }
+        });
+
+        // Тёмная тема без рамок
+        Lampa.SettingsApi.addParam({
+          component: "more",
+          param: {
+            name: "drxaos_supermenu_borderless_dark",
+            type: "toggle",
+            default: SuperMenuConfig.FEATURES.borderless_dark_theme
+          },
+          field: {
+            name: "Тема: тёмная без рамок",
+            description: "Сглаженные карточки без рамок, тёмный фон, повышенная читаемость"
+          }
+        });
+
+
         // Необязательно: хранить API-ключ КиноПоиск в настройках
         Lampa.SettingsApi.addParam({
           component: "more",
@@ -883,8 +1039,11 @@
         var ratingsImdb = Lampa.Storage.get("drxaos_supermenu_ratings_imdb", SuperMenuConfig.FEATURES.ratings_imdb ? "true" : "false") === "true";
         var ratingsKp = Lampa.Storage.get("drxaos_supermenu_ratings_kp", SuperMenuConfig.FEATURES.ratings_kp ? "true" : "false") === "true";
         var labelColors = Lampa.Storage.get("drxaos_supermenu_label_colors", SuperMenuConfig.FEATURES.label_colors ? "true" : "false") === "true";
-        var topbarExit = Lampa.Storage.get("drxaos_supermenu_topbar_exit", SuperMenuConfig.FEATURES.topbar_exit_menu ? "true" : "false") === "true";
         var labelScheme = Lampa.Storage.get("drxaos_supermenu_label_scheme", SuperMenuConfig.LABEL_SCHEME);
+        var topbarExit = Lampa.Storage.get("drxaos_supermenu_topbar_exit", SuperMenuConfig.FEATURES.topbar_exit_menu ? "true" : "false") === "true";
+        var madnessLevel = Lampa.Storage.get("drxaos_supermenu_madness_level", SuperMenuConfig.FEATURES.madness_level || "normal");
+        var borderlessTheme = Lampa.Storage.get("drxaos_supermenu_borderless_dark", SuperMenuConfig.FEATURES.borderless_dark_theme ? "true" : "false") === "true";
+
         var kpApiKey = Lampa.Storage.get("drxaos_supermenu_kp_api_key", "");
 
         if (kpApiKey) {
@@ -897,9 +1056,14 @@
         SuperMenuConfig.FEATURES.ratings_kp = ratingsKp;
         SuperMenuConfig.FEATURES.label_colors = labelColors;
         SuperMenuConfig.FEATURES.topbar_exit_menu = topbarExit;
+        SuperMenuConfig.FEATURES.borderless_dark_theme = borderlessTheme;
 
         if (labelScheme === "vivid" || labelScheme === "soft") {
           SuperMenuConfig.LABEL_SCHEME = labelScheme;
+        }
+
+        if (madnessLevel === "off" || madnessLevel === "normal" || madnessLevel === "full") {
+          SuperMenuConfig.FEATURES.madness_level = madnessLevel;
         }
 
         if (perfMode === "android_perf") {
@@ -981,7 +1145,11 @@
     // Регистрируем настройки и верхнюю кнопку
     registerSettings();
     applyUserSettings();
+    injectBorderlessDarkTheme();
     registerTopBarButton();
+    initMadnessSectionHooks();
+
+
 
     // В следующих частях:
     // - подключим реальную логику меню выхода из menus.js в onClick верхней кнопки
