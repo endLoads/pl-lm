@@ -70,7 +70,22 @@
 
       LABEL_SCHEME: "vivid", // текущая схема
 
-      // Включение/выключение подсистем (настраиваемые в Settings)
+      // Параметры рейтингов и API
+      RATINGS: {
+        // Базовые URL и ключи можно будет задать в настройках или прямо здесь
+        tmdbApiKey: "", // если понадобится прямое обращение к TMDB
+        kpApiKey:   "", // ключ для Kinopoisk API Unofficial
+        kpApiUrl:   "https://kinopoiskapiunofficial.tech/api/v2.2/films" // базовый URL [web:224]
+      },
+
+      // Кэш рейтингов на время сессии
+      RATING_CACHE: {
+        tmdb: Object.create(null),
+        imdb: Object.create(null),
+        kp:   Object.create(null)
+      },
+
+      // Включение/выключение подсистем
       FEATURES: {
         madness: true,
         ratings_tmdb: true,
@@ -131,6 +146,166 @@
         }
       };
     }
+
+    // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ РЕЙТИНГОВ ===
+
+    function fetchJsonWithTimeout(url, options, timeoutMs) {
+      return new Promise(function (resolve, reject) {
+        var aborted = false;
+        var timeout = setTimeout(function () {
+          aborted = true;
+          reject(new Error("Timeout " + timeoutMs + "ms for " + url));
+        }, timeoutMs || 8000);
+
+        fetch(url, options || {})
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
+            return res.json();
+          })
+          .then(function (json) {
+            if (!aborted) {
+              clearTimeout(timeout);
+              resolve(json);
+            }
+          })
+          .catch(function (err) {
+            if (!aborted) {
+              clearTimeout(timeout);
+              reject(err);
+            }
+          });
+      });
+    }
+
+    function getRatingFromCache(source, key) {
+      var cache = SuperMenuConfig.RATING_CACHE[source];
+      if (!cache) return null;
+      return cache[key] || null;
+    }
+
+    function setRatingToCache(source, key, value) {
+      var cache = SuperMenuConfig.RATING_CACHE[source];
+      if (!cache) return;
+      cache[key] = value;
+    }
+
+    /**
+     * meta: { title: string, year?: number, tmdbId?: string, imdbId?: string, kpId?: string }
+     * cb:   function({ source: 'tmdb'|'imdb'|'kp', value: number, votes?: number }|null)
+     */
+    function getTmdbRating(meta, cb) {
+      if (!SuperMenuConfig.FEATURES.ratings_tmdb) {
+        cb && cb(null);
+        return;
+      }
+
+      try {
+        var key = meta.tmdbId || (meta.title + "_" + (meta.year || ""));
+        var cached = getRatingFromCache("tmdb", key);
+        if (cached) {
+          cb && cb(cached);
+          return;
+        }
+
+        // ВАЖНО: во многих случаях tmdb-рейтинг уже есть в cardData от Лампы/источника.
+        // Здесь только каркас для случаев, когда нужно брать прям с API.
+        // По умолчанию просто возвращаем null, чтобы не плодить лишних запросов.
+        cb && cb(null);
+      } catch (e) {
+        log("getTmdbRating error:", e);
+        cb && cb(null);
+      }
+    }
+
+    function getImdbRating(meta, cb) {
+      if (!SuperMenuConfig.FEATURES.ratings_imdb) {
+        cb && cb(null);
+        return;
+      }
+
+      try {
+        var key = meta.imdbId || (meta.title + "_" + (meta.year || ""));
+        var cached = getRatingFromCache("imdb", key);
+        if (cached) {
+          cb && cb(cached);
+          return;
+        }
+
+        // Аналогично TMDB: тут только каркас.
+        cb && cb(null);
+      } catch (e) {
+        log("getImdbRating error:", e);
+        cb && cb(null);
+      }
+    }
+
+    function getKpRating(meta, cb) {
+      if (!SuperMenuConfig.FEATURES.ratings_kp) {
+        cb && cb(null);
+        return;
+      }
+
+      try {
+        var key = meta.kpId || (meta.title + "_" + (meta.year || ""));
+        var cached = getRatingFromCache("kp", key);
+        if (cached) {
+          cb && cb(cached);
+          return;
+        }
+
+        // Если ключа нет, просто не идём в API
+        if (!SuperMenuConfig.RATINGS.kpApiKey || !SuperMenuConfig.RATINGS.kpApiUrl) {
+          cb && cb(null);
+          return;
+        }
+
+        // Базовый пример запроса по названию/году к Kinopoisk API Unofficial [web:224]
+        var url = SuperMenuConfig.RATINGS.kpApiUrl
+          + "?keyword=" + encodeURIComponent(meta.title)
+          + (meta.year ? "&yearFrom=" + meta.year + "&yearTo=" + meta.year : "");
+
+        fetchJsonWithTimeout(url, {
+          headers: {
+            "X-API-KEY": SuperMenuConfig.RATINGS.kpApiKey
+          }
+        }, 8000)
+          .then(function (json) {
+            var film = null;
+
+            // Структура ответа может отличаться, поэтому оставляем как пример:
+            if (json && Array.isArray(json.items) && json.items.length) {
+              film = json.items[0];
+            } else if (json && Array.isArray(json.films) && json.films.length) {
+              film = json.films[0];
+            }
+
+            if (!film) {
+              cb && cb(null);
+              return;
+            }
+
+            var value = Number(film.ratingImdb || film.ratingKinopoisk || film.rating);
+            var votes = Number(film.ratingImdbVoteCount || film.ratingKinopoiskVoteCount || film.votes);
+
+            if (!isFinite(value)) {
+              cb && cb(null);
+              return;
+            }
+
+            var result = { source: "kp", value: value, votes: isFinite(votes) ? votes : undefined };
+            setRatingToCache("kp", key, result);
+            cb && cb(result);
+          })
+          .catch(function (err) {
+            log("getKpRating fetch error:", err);
+            cb && cb(null);
+          });
+      } catch (e) {
+        log("getKpRating error:", e);
+        cb && cb(null);
+      }
+    }
+
 
     // === Настройки плагина в интерфейсе Lampa ===
 
@@ -544,6 +719,21 @@
           }
         });
 
+        // Необязательно: хранить API-ключ КиноПоиск в настройках
+        Lampa.SettingsApi.addParam({
+          component: "more",
+          param: {
+            name: "drxaos_supermenu_kp_api_key",
+            type: "input",
+            default: ""
+          },
+          field: {
+            name: "Ключ КиноПоиск API",
+            description: "Kinopoisk API Unofficial (оставьте пустым, если не используете)"
+          }
+        });
+
+
         // Режим производительности (для слабых устройств)
         Lampa.SettingsApi.addParam({
           component: "more",
@@ -695,6 +885,11 @@
         var labelColors = Lampa.Storage.get("drxaos_supermenu_label_colors", SuperMenuConfig.FEATURES.label_colors ? "true" : "false") === "true";
         var topbarExit = Lampa.Storage.get("drxaos_supermenu_topbar_exit", SuperMenuConfig.FEATURES.topbar_exit_menu ? "true" : "false") === "true";
         var labelScheme = Lampa.Storage.get("drxaos_supermenu_label_scheme", SuperMenuConfig.LABEL_SCHEME);
+        var kpApiKey = Lampa.Storage.get("drxaos_supermenu_kp_api_key", "");
+
+        if (kpApiKey) {
+          SuperMenuConfig.RATINGS.kpApiKey = kpApiKey;
+        }
 
         SuperMenuConfig.FEATURES.madness = madness;
         SuperMenuConfig.FEATURES.ratings_tmdb = ratingsTmdb;
@@ -765,6 +960,21 @@
       } catch (e) {
         log("Ошибка в colorizeLabelsInContainer:", e);
       }
+    }
+
+    // === Экспортируем часть API во внешний мир, чтобы темы могли использовать ===
+    try {
+      window.DrxSuperMenu = window.DrxSuperMenu || {};
+
+      // Цветовые функции
+      window.DrxSuperMenu.colorizeLabelsInContainer = colorizeLabelsInContainer;
+
+      // Рейтинги
+      window.DrxSuperMenu.getTmdbRating = getTmdbRating;
+      window.DrxSuperMenu.getImdbRating = getImdbRating;
+      window.DrxSuperMenu.getKpRating   = getKpRating;
+    } catch (e) {
+      log("Не удалось экспортировать DrxSuperMenu API:", e);
     }
 
 
