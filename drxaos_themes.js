@@ -7365,8 +7365,9 @@ function activateTheme(themeId) {
             }
             var $btn = $('#drxaos-quick-theme-btn');
             if ($btn.length) {
-                $// // // btn.focus() // УБРАН АВТОФОКУС // УБРАН АВТОФОКУС // УБРАН АВТОФОКУС;
-            }
+    // $btn.focus(); // УБРАН АВТОФОКУС
+}
+
         }, 200);
     }, 100);
 }
@@ -7483,8 +7484,9 @@ $(document).on('keydown.quickThemeGlobal', function(e) {
             }
             var $btn = $('#drxaos-quick-theme-btn');
             if ($btn.length) {
-                $// // // btn.focus() // УБРАН АВТОФОКУС // УБРАН АВТОФОКУС // УБРАН АВТОФОКУС;
-            }
+    // $btn.focus(); // УБРАН АВТОФОКУС
+}
+
         }
     }
 });
@@ -10544,21 +10546,19 @@ function initMovieQualitySystem(jacredUrl) {
                     addQualityToMiniCard(card, cardData);
                           // === РАСКРАСКА МЕТОК ТИПА И КАЧЕСТВА ===
       try {
-        if (window.colorizeLabelsInContainer) {
-          // Определяем тип карточки ('movie' или 'tv')
-          var cardType = drxaosResolveCardType(cardData.payload || cardData, card);
+    if (window.DrxSuperMenu && typeof DrxSuperMenu.colorizeLabelsInContainer === 'function') {
+        var cardType = drxaosResolveCardType(cardData.payload || cardData, card);
+        var inlineQuality = extractInlineQuality(cardData.payload || cardData, card);
 
-          // Пытаемся вытащить качество так же, как для бейджа качества
-          var inlineQuality = extractInlineQuality(cardData.payload || cardData, card);
-
-          window.colorizeLabelsInContainer(card, {
+        DrxSuperMenu.colorizeLabelsInContainer(card, {
             type: cardType || null,
             quality: inlineQuality || null
-          });
-        }
-      } catch (e) {
-        logError("colorizeLabelsInContainer failed", e);
-      }
+        });
+    }
+} catch (e) {
+    logError("colorizeLabelsInContainer failed", e);
+}
+
       // === КОНЕЦ БЛОКА РАСКРАСКИ ===
 
                           colorizeCardVotes(card);
@@ -10612,7 +10612,7 @@ function initMovieQualitySystem(jacredUrl) {
       // === КОНЕЦ БЛОКА KP ===
       // === БЕЙДЖ ОЗУЧКИ: НОВАЯ СЕРИЯ В ВАШЕЙ ОЗУЧКЕ (beta) ===
       try {
-        if (window.DrxSuperMenu && DrxSuperMenu.checkVoiceoverUpdate) {
+        if (window.DrxSuperMenu && window.DrxSuperMenu.checkVoiceoverUpdate) {
           // Пытаемся получить ключ контента (используй то, что у тебя реально есть)
           var vKey =
             cardData.imdb_id ||
@@ -10630,7 +10630,7 @@ function initMovieQualitySystem(jacredUrl) {
             // Если есть инфа об озвучке у последней серии — тоже можно передать
             var latestVoiceId = cardData.latest_voice_id || cardData.voice_id || undefined;
 
-            var res = DrxSuperMenu.checkVoiceoverUpdate({
+            var res = window.DrxSuperMenu.checkVoiceoverUpdate({
               key: vKey,
               availableVoiceId: latestVoiceId,
               latestSeason: Number(latestSeason),
@@ -13640,8 +13640,9 @@ Lampa.Listener.follow('app', function(e) {
                 setTimeout(function() {
                     var $btn = $('#drxaos-quick-theme-btn');
                     if ($btn.length) {
-                        $// // // btn.focus() // УБРАН АВТОФОКУС // УБРАН АВТОФОКУС // УБРАН АВТОФОКУС;
-                    }
+    // $btn.focus(); // УБРАН АВТОФОКУС
+}
+
                 }, 300);
             }
         }
