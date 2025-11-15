@@ -100,12 +100,12 @@
       perf_mode: "normal",
       ratings_tmdb: false,
       ratings_imdb: false,
-      ratings_kp: false,
+      ratings_kp: true,
       label_colors_enabled: true,
       label_scheme: "vivid",
       topbar_exit_menu: true,
       borderless_dark_theme: false,
-      voiceover_tracking: false
+      voiceover_tracking: true
     }
   };
 
@@ -116,15 +116,22 @@
     return SuperMenuConfig.LABEL_COLORS[scheme] || SuperMenuConfig.LABEL_COLORS.vivid;
   }
 
-  function setFeatureFlag(key, value) {
-    if (!SuperMenuConfig.FEATURES.hasOwnProperty(key)) return;
-    SuperMenuConfig.FEATURES[key] = value;
+  function getRatingFromCache(source, key) {
+    var cache = SuperMenuConfig.RATING_CACHE[source];
+    return cache ? cache[key] : null;
   }
 
-  // ================== РАСКРАСКА МЕТОК ==================
+  function setRatingToCache(source, key, value) {
+    var cache = SuperMenuConfig.RATING_CACHE[source];
+    if (!cache) return;
+    cache[key] = value;
+  }
+
+  // ================== РАСКРАСКА МЕТОК (для темы) ==================
 
   function colorizeLabelsInContainer(container, meta) {
     if (!container || !meta) return;
+    if (!SuperMenuConfig.FEATURES.label_colors_enabled) return;
 
     try {
       var colors = getCurrentLabelColors();
@@ -159,18 +166,7 @@
     }
   }
 
-  // ================== РЕЙТИНГИ (КАРКАС) ==================
-
-  function getRatingFromCache(source, key) {
-    var cache = SuperMenuConfig.RATING_CACHE[source];
-    return cache ? cache[key] : null;
-  }
-
-  function setRatingToCache(source, key, value) {
-    var cache = SuperMenuConfig.RATING_CACHE[source];
-    if (!cache) return;
-    cache[key] = value;
-  }
+  // ================== РЕЙТИНГ КИНОПОИСК (для бейджа темы) ==================
 
   function getKpRating(meta, cb) {
     try {
@@ -178,6 +174,7 @@
         cb && cb(null);
         return;
       }
+
       var title = meta && meta.title ? String(meta.title) : "";
       var year = meta && meta.year ? Number(meta.year) : 0;
       var kpId = meta && meta.kpId ? String(meta.kpId) : null;
@@ -194,15 +191,99 @@
         return;
       }
 
-      cb && cb(null);
-      return;
+      var apiKey = SuperMenuConfig.RATINGS.kpApiKey;
+      var apiUrl = SuperMenuConfig.RATINGS.kpApiUrl;
+      if (!apiKey || !apiUrl) {
+        log("getKpRating: kpApiKey or kpApiUrl not set");
+        cb && cb(null);
+        return;
+      }
+
+      var url = apiUrl;
+      var params = [];
+
+      if (kpId) {
+        url = apiUrl + "/" + encodeURIComponent(kpId);
+      } else {
+        params.push("keyword=" + encodeURIComponent(title));
+        if (year) {
+          params.push("yearFrom=" + year);
+          params.push("yearTo=" + year);
+        }
+        if (params.length) url += "?" + params.join("&");
+      }
+
+      fetch(url, {
+        method: "GET",
+        headers: {
+          "X-API-KEY": apiKey,
+          "accept": "application/json"
+        }
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error("KP HTTP " + r.status);
+          return r.json();
+        })
+        .then(function (json) {
+          try {
+            var film = null;
+
+            if (json && json.films && json.films.length) {
+              film = json.films[0];
+            } else if (json && json.items && json.items.length) {
+              film = json.items[0];
+            } else if (json && (json.ratingKinopoisk || json.ratingImdb)) {
+              film = json;
+            }
+
+            if (!film) {
+              cb && cb(null);
+              return;
+            }
+
+            var value = null;
+            var votes = null;
+
+            if (film.ratingKinopoisk != null && isFinite(film.ratingKinopoisk)) {
+              value = Number(film.ratingKinopoisk);
+              votes = film.ratingKinopoiskVoteCount || film.votes;
+            } else if (film.ratingImdb != null && isFinite(film.ratingImdb)) {
+              value = Number(film.ratingImdb);
+              votes = film.ratingImdbVoteCount || film.votes;
+            } else if (film.rating != null && isFinite(film.rating)) {
+              value = Number(film.rating);
+              votes = film.votes;
+            }
+
+            if (!value || !isFinite(value)) {
+              cb && cb(null);
+              return;
+            }
+
+            var result = {
+              value: value,
+              votes: votes != null ? Number(votes) : null,
+              raw: film
+            };
+
+            setRatingToCache("kp", cacheKey, result);
+            cb && cb(result);
+          } catch (e) {
+            log("getKpRating parse error:", e);
+            cb && cb(null);
+          }
+        })
+        .catch(function (e) {
+          log("getKpRating fetch error:", e);
+          cb && cb(null);
+        });
     } catch (e) {
       log("getKpRating error:", e);
       cb && cb(null);
     }
   }
 
-  // ================== ОЗВУЧКИ (КАРКАС) ==================
+  // ================== ОЗВУЧКИ (трекинг и обновления) ==================
 
   function rememberVoiceoverSelection(meta) {
     try {
@@ -273,7 +354,7 @@
           html.innerHTML = [
             "<div class=\"settings-param\">",
             "<div class=\"settings-param__name\">DrxSuperMenu</div>",
-            "<div class=\"settings-param__descr\">Расширенное меню, рейтинги, метки и озвучки.</div>",
+            "<div class=\"settings-param__descr\">Дополнительные метки, рейтинг КиноПоиска и озвучки.</div>",
             "</div>"
           ].join("");
           body.appendChild(html);
@@ -342,7 +423,6 @@
         return;
       }
 
-      // Определяем платформу
       try {
         SuperMenuConfig.PLATFORM.isAndroid = Lampa.Platform.is("android");
         SuperMenuConfig.PLATFORM.isWebOS = Lampa.Platform.is("webos");
@@ -404,7 +484,6 @@
     }
   }
 
-  // Ожидаем появления Lampa
   if (typeof window.Lampa !== "undefined") {
     bootstrap();
   } else {
