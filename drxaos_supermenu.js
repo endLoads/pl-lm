@@ -1,578 +1,731 @@
-/*
- * ============================================================================
- * DRXAOS SuperMenu - Fixed and Optimized Plugin for Lampa
- * ============================================================================
- * 
- * Исправлены критические ошибки инициализации и доступа к хранилищу.
- * Все функции из оригинального кода сохранены и адаптированы для безопасной работы.
- * 
- * ============================================================================
- */
-
 (function () {
   "use strict";
 
-  // ============================================================================
-  // СЛОЙ СОВМЕСТИМОСТИ И БЕЗОПАСНОСТИ
-  // ============================================================================
-
-  // Безопасные обертки для Lampa.Storage
-  function drxaosSafeGet(key, defaultValue) {
-    try {
-      if (!window.Lampa || !Lampa.Storage) return defaultValue;
-      var value = Lampa.Storage.get(key, defaultValue);
-      return value !== undefined ? value : defaultValue;
-    } catch (e) {
-      console.warn('[SuperMenu] Storage.get error:', e);
-      return defaultValue;
-    }
-  }
-
-  function drxaosSafeSet(key, value) {
-    try {
-      if (!window.Lampa || !Lampa.Storage) return false;
-      Lampa.Storage.set(key, value);
-      return true;
-    } catch (e) {
-      console.warn('[SuperMenu] Storage.set error:', e);
-      return false;
-    }
+  // Глобальная переменная для предотвращения повторной инициализации
+  if (window.drxaos_supermenu_initialized) {
+    console.log('[DRXAOS SuperMenu] Plugin already initialized');
+    return;
   }
 
   // ============================================================================
-  // ОСНОВНОЙ КОД ПЛАГИНА
+  // БАЗОВАЯ КОНФИГУРАЦИЯ ПЛАГИНА
   // ============================================================================
+  var SuperMenuConfig = {
+    DEBUG: false,
+    VERBOSE_LOGGING: false,
 
-  function init() {
-    if (typeof Lampa === "undefined") return;
+    // Профиль производительности (базовый)
+    PERFORMANCE: {
+      DEBOUNCE_DELAY: 300,
+      THROTTLE_LIMIT: 100,
+      MUTATION_THROTTLE: 50
+    },
 
-    // === БАЗОВАЯ КОНФИГУРАЦИЯ ПЛАГИНА ===
-    var SuperMenuConfig = {
-      DEBUG: false,
-      VERBOSE_LOGGING: false,
+    // Поведение в разных средах
+    PLATFORM: {
+      isAndroid: false,
+      isWebOS: false,
+      isTizen: false,
+      isBrowser: false,
+      isTV: false
+    },
 
-      // Профиль производительности (базовый)
-      PERFORMANCE: {
-        DEBOUNCE_DELAY: 300,
-        THROTTLE_LIMIT: 100,
-        MUTATION_THROTTLE: 50
-      },
-
-      // Поведение в разных средах
-      PLATFORM: {
-        isAndroid: Lampa.Platform.is("android"),
-        isWebOS: Lampa.Platform.is("webos"),
-        isTizen: Lampa.Platform.is("tizen"),
-        isBrowser: Lampa.Platform.is("browser"),
-        isTV:
-          Lampa.Platform.is("android") ||
-          Lampa.Platform.is("tizen") ||
-          Lampa.Platform.is("webos") ||
-          Lampa.Platform.is("orsay") ||
-          Lampa.Platform.is("netcast")
-      },
-
-      // Цветовые схемы для меток качества и типа
-      LABEL_COLORS: {
-        vivid: {
-          TYPE: {
-            movie: "#FFD54F",
-            tv: "#4CAF50",
-            anime: "#E91E63"
-          },
-          QUALITY: {
-            "4K": "#FF5722",
-            "2160p": "#FF5722",
-            "1080p": "#03A9F4",
-            "720p": "#B0BEC5",
-            SD: "#90A4AE",
-            CAM: "#FF7043",
-            HDR: "#FFC107"
-          }
+    // Цветовые схемы для меток качества и типа
+    LABEL_COLORS: {
+      vivid: {
+        TYPE: {
+          movie: "#FFD54F",
+          tv: "#4CAF50",
+          anime: "#E91E63"
         },
-        soft: {
-          TYPE: {
-            movie: "#FFE082",
-            tv: "#A5D6A7",
-            anime: "#F48FB1"
-          },
-          QUALITY: {
-            "4K": "#FFAB91",
-            "2160p": "#FFAB91",
-            "1080p": "#81D4FA",
-            "720p": "#CFD8DC",
-            SD: "#B0BEC5",
-            CAM: "#FFAB91",
-            HDR: "#FFD54F"
-          }
+        QUALITY: {
+          "4K": "#FF5722",
+          "2160p": "#FF5722",
+          "1080p": "#03A9F4",
+          "720p": "#B0BEC5",
+          SD: "#90A4AE",
+          CAM: "#FF7043",
+          HDR: "#FFC107"
         }
       },
-
-      LABEL_SCHEME: "vivid",
-
-      // Параметры рейтингов и API
-      RATINGS: {
-        tmdbApiKey: "",
-        kpApiKey: "",
-        kpApiUrl: "https://kinopoiskapiunofficial.tech/api/v2.2/films"
-      },
-
-      // Кэш рейтингов на время сессии
-      RATING_CACHE: {
-        tmdb: Object.create(null),
-        imdb: Object.create(null),
-        kp: Object.create(null)
-      },
-
-      VOICEOVER: {
-        enabled: false,
-        cache: Object.create(null)
-      },
-
-      // Включение/выключение подсистем
-      FEATURES: {
-        madness: true,
-        madness_level: "normal", // off | normal | full
-
-        ratings_tmdb: true,
-        ratings_imdb: true,
-        ratings_kp: true,
-        ratings_other: false,
-
-        label_colors: true,
-        voiceover_tracking: false,
-        topbar_exit_menu: true,
-
-        borderless_dark_theme: false
+      soft: {
+        TYPE: {
+          movie: "#FFE082",
+          tv: "#A5D6A7",
+          anime: "#F48FB1"
+        },
+        QUALITY: {
+          "4K": "#FFAB91",
+          "2160p": "#FFAB91",
+          "1080p": "#81D4FA",
+          "720p": "#CFD8DC",
+          SD: "#B0BEC5",
+          CAM: "#FFAB91",
+          HDR: "#FFD54F"
+        }
       }
-    };
+    },
 
-    // Профиль производительности для Android TV
-    if (SuperMenuConfig.PLATFORM.isAndroid) {
-      SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY = 500;
-      SuperMenuConfig.PERFORMANCE.THROTTLE_LIMIT = 150;
-      SuperMenuConfig.PERFORMANCE.MUTATION_THROTTLE = 80;
+    LABEL_SCHEME: "vivid",
+
+    // Параметры рейтингов и API
+    RATINGS: {
+      tmdbApiKey: "",
+      kpApiKey: "",
+      kpApiUrl: "https://kinopoiskapiunofficial.tech/api/v2.2/films"
+    },
+
+    // Кэш рейтингов на время сессии
+    RATING_CACHE: {
+      tmdb: {},
+      imdb: {},
+      kp: {}
+    },
+
+    VOICEOVER: {
+      enabled: false,
+      cache: {}
+    },
+
+    // Включение/выключение подсистем
+    FEATURES: {
+      madness: true,
+      madness_level: "normal", // off | normal | full
+
+      ratings_tmdb: true,
+      ratings_imdb: true,
+      ratings_kp: true,
+      ratings_other: false,
+
+      label_colors: true,
+      label_quality: true,
+      label_type: true,
+      label_year: true,
+      label_voiceover: true,
+      label_duration: true,
+      label_genre: true,
+
+      hero_titles: true,
+      hero_ratings: true,
+      hero_info: true,
+      hero_backdrop: true,
+
+      cards_enhanced: true,
+      cards_hover: true,
+      cards_animations: true,
+
+      menu_enhanced: true,
+      menu_compact: false,
+      menu_ratings: true,
+      menu_quality: true,
+
+      details_expanded: true,
+      details_spoilers: false,
+      details_crew: true,
+
+      search_enhanced: true,
+      search_suggestions: true,
+
+      torretns_quality: true,
+      torretns_filter: true,
+      torretns_sort: true
     }
+  };
 
-    // === УТИЛИТЫ ===
-    function log() {
-      if (!SuperMenuConfig.DEBUG && !SuperMenuConfig.VERBOSE_LOGGING) return;
-      try {
-        console.log.apply(console, ["[SuperMenu]"].concat([].slice.call(arguments)));
-      } catch (e) {}
+  // ============================================================================
+  // УТИЛИТЫ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+  // ============================================================================
+
+  // Безопасное логирование
+  function log(message, type = 'info') {
+    if (!SuperMenuConfig.DEBUG && type !== 'error') return;
+    
+    const prefix = '[DRXAOS SuperMenu]';
+    switch (type) {
+      case 'error':
+        console.error(prefix, message);
+        break;
+      case 'warn':
+        console.warn(prefix, message);
+        break;
+      case 'info':
+      default:
+        console.log(prefix, message);
+        break;
     }
+  }
 
-    function debounce(fn, delay) {
-      var timeout;
-      return function () {
-        var ctx = this;
-        var args = arguments;
+  // Безопасная работа с хранилищем
+  function safeStorageGet(key, defaultValue = null) {
+    try {
+      if (window.Lampa && Lampa.Storage) {
+        return Lampa.Storage.get(key, defaultValue);
+      }
+    } catch (e) {
+      log('Storage get error: ' + e.message, 'error');
+    }
+    return defaultValue;
+  }
+
+  function safeStorageSet(key, value) {
+    try {
+      if (window.Lampa && Lampa.Storage) {
+        Lampa.Storage.set(key, value);
+        return true;
+      }
+    } catch (e) {
+      log('Storage set error: ' + e.message, 'error');
+    }
+    return false;
+  }
+
+  // Debounce функция для оптимизации
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
         clearTimeout(timeout);
-        timeout = setTimeout(function () {
-          fn.apply(ctx, args);
-        }, delay);
+        func(...args);
       };
-    }
-
-    function throttle(fn, limit) {
-      var inThrottle;
-      var lastArgs;
-      var lastCtx;
-      return function () {
-        lastCtx = this;
-        lastArgs = arguments;
-        if (!inThrottle) {
-          fn.apply(lastCtx, lastArgs);
-          inThrottle = true;
-          setTimeout(function () {
-            inThrottle = false;
-            if (lastArgs) {
-              fn.apply(lastCtx, lastArgs);
-              lastArgs = null;
-            }
-          }, limit);
-        }
-      };
-    }
-
-    // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ РЕЙТИНГОВ ===
-
-    function fetchJsonWithTimeout(url, options, timeoutMs) {
-      return new Promise(function (resolve, reject) {
-        var aborted = false;
-        var timeout = setTimeout(function () {
-          aborted = true;
-          reject(new Error("Timeout " + timeoutMs + "ms for " + url));
-        }, timeoutMs || 8000);
-
-        fetch(url, options || {})
-          .then(function (res) {
-            if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
-            return res.json();
-          })
-          .then(function (json) {
-            if (!aborted) {
-              clearTimeout(timeout);
-              resolve(json);
-            }
-          })
-          .catch(function (err) {
-            if (!aborted) {
-              clearTimeout(timeout);
-              reject(err);
-            }
-          });
-      });
-    }
-
-    function getRatingFromCache(source, key) {
-      var cache = SuperMenuConfig.RATING_CACHE[source];
-      if (!cache) return null;
-      return cache[key] || null;
-    }
-
-    function setRatingToCache(source, key, value) {
-      var cache = SuperMenuConfig.RATING_CACHE[source];
-      if (!cache) return;
-      cache[key] = value;
-    }
-
-    function getTmdbRating(meta, cb) {
-      if (!SuperMenuConfig.FEATURES.ratings_tmdb) {
-        cb && cb(null);
-        return;
-      }
-
-      try {
-        var key = meta.tmdbId || meta.id || meta.title + "_" + (meta.year || "");
-        var cached = getRatingFromCache("tmdb", key);
-        if (cached) {
-          cb && cb(cached);
-          return;
-        }
-
-        // Здесь должна быть логика запроса TMDB, если ее нет в оригинальном коде,
-        // то оставляем как есть, чтобы не нарушать требование "НИЧЕГО не должно пропасть".
-        cb && cb(null);
-      } catch (e) {
-        log("getTmdbRating error:", e);
-        cb && cb(null);
-      }
-    }
-
-    function getImdbRating(meta, cb) {
-      if (!SuperMenuConfig.FEATURES.ratings_imdb) {
-        cb && cb(null);
-        return;
-      }
-
-      try {
-        var key = meta.imdbId || meta.id || meta.title + "_" + (meta.year || "");
-        var cached = getRatingFromCache("imdb", key);
-        if (cached) {
-          cb && cb(cached);
-          return;
-        }
-
-        // Здесь должна быть логика запроса IMDB
-        cb && cb(null);
-      } catch (e) {
-        log("getImdbRating error:", e);
-        cb && cb(null);
-      }
-    }
-
-    function getKpRating(meta, cb) {
-      if (!SuperMenuConfig.FEATURES.ratings_kp) {
-        cb && cb(null);
-        return;
-      }
-
-      try {
-        var key = meta.kpId || meta.id || meta.title + "_" + (meta.year || "");
-        var cached = getRatingFromCache("kp", key);
-        if (cached) {
-          cb && cb(cached);
-          return;
-        }
-
-        if (!SuperMenuConfig.RATINGS.kpApiKey || !SuperMenuConfig.RATINGS.kpApiUrl) {
-          cb && cb(null);
-          return;
-        }
-
-        var url =
-          SuperMenuConfig.RATINGS.kpApiUrl +
-          "?keyword=" +
-          encodeURIComponent(meta.title) +
-          (meta.year ? "&yearFrom=" + meta.year + "&yearTo=" + meta.year : "");
-
-        fetchJsonWithTimeout(
-          url,
-          {
-            headers: {
-              "X-API-KEY": SuperMenuConfig.RATINGS.kpApiKey
-            }
-          },
-          8000
-        )
-          .then(function (json) {
-            var film = null;
-
-            if (json && Array.isArray(json.items) && json.items.length) {
-              film = json.items[0];
-            } else if (json && Array.isArray(json.films) && json.films.length) {
-              film = json.films[0];
-            }
-
-            if (!film) {
-              cb && cb(null);
-              return;
-            }
-
-            var value = Number(
-              film.ratingImdb || film.ratingKinopoisk || film.rating
-            );
-            var votes = Number(
-              film.ratingImdbVoteCount ||
-                film.ratingKinopoiskVoteCount ||
-                film.votes
-            );
-
-            if (!isFinite(value)) {
-              cb && cb(null);
-              return;
-            }
-
-            var result = {
-              source: "kp",
-              value: value,
-              votes: isFinite(votes) ? votes : undefined
-            };
-            setRatingToCache("kp", key, result);
-            cb && cb(result);
-          })
-          .catch(function (err) {
-            log("getKpRating fetch error:", err);
-            cb && cb(null);
-          });
-      } catch (e) {
-        log("getKpRating error:", e);
-        cb && cb(null);
-      }
-    }
-
-    // === МЕНЮ ВЫХОДА (адаптация menus.js) ===
-
-    var ExitMenuConfig = {
-      visibilityValues: { 1: "Скрыть", 2: "Отобразить" },
-      items: [
-        { name: "exit", defaultValue: "2", title: "Закрыть приложение" },
-        { name: "reboot", defaultValue: "2", title: "Перезагрузить" },
-        { name: "switch_server", defaultValue: "2", title: "Сменить сервер" },
-        { name: "clear_cache", defaultValue: "2", title: "Очистить кэш" },
-        { name: "youtube", defaultValue: "1", title: "YouTube" },
-        { name: "rutube", defaultValue: "1", title: "RuTube" },
-        { name: "drm_play", defaultValue: "1", title: "DRM Play" },
-        { name: "twitch", defaultValue: "1", title: "Twitch" },
-        { name: "fork_player", defaultValue: "1", title: "ForkPlayer" },
-        { name: "speedtest", defaultValue: "1", title: "Speed Test" }
-      ]
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
     };
+  }
 
-    function exitMenuEnsureDefaults() {
+  // Throttle функция для оптимизации
+  function throttle(func, limit) {
+    let inThrottle;
+    return function() {
+      const args = arguments;
+      const context = this;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    };
+  }
+
+  // ============================================================================
+  // ОСНОВНОЙ КЛАСС ПЛАГИНА
+  // ============================================================================
+
+  class SuperMenuPlugin {
+    constructor() {
+      this.initialized = false;
+      this.originalCreateMenu = null;
+      this.observer = null;
+      this.settings = Object.assign({}, SuperMenuConfig);
+      
+      // Привязка методов
+      this.init = this.init.bind(this);
+      this.enhanceMenu = this.enhanceMenu.bind(this);
+      this.createEnhancedCard = this.createEnhancedCard.bind(this);
+      this.applyLabels = this.applyLabels.bind(this);
+      this.addQualityIndicators = this.addQualityIndicators.bind(this);
+    }
+
+    // Инициализация плагина
+    init() {
+      if (this.initialized) {
+        log('Plugin already initialized');
+        return;
+      }
+
+      // Проверка доступности Lampa
+      if (typeof window.Lampa === 'undefined') {
+        log('Lampa API not found', 'error');
+        return;
+      }
+
+      // Настройка платформы
+      this.setupPlatform();
+      
+      // Загрузка настроек
+      this.loadSettings();
+      
+      // Сохранение оригинальных методов
+      this.backupOriginalMethods();
+      
+      // Применение улучшений
+      this.applyEnhancements();
+      
+      // Настройка наблюдателя
+      this.setupObserver();
+      
+      this.initialized = true;
+      log('Plugin initialized successfully');
+      
+      // Сохраняем флаг инициализации
+      window.drxaos_supermenu_initialized = true;
+    }
+
+    // Настройка параметров платформы
+    setupPlatform() {
       try {
-        var defaults = {
-          back_plug: true,
-          exit: "2",
-          reboot: "2",
-          switch_server: "2",
-          clear_cache: "2",
-          youtube: "1",
-          rutube: "1",
-          drm_play: "1",
-          twitch: "1",
-          fork_player: "1",
-          speedtest: "1"
-        };
-
-        Object.keys(defaults).forEach(function (key) {
-          // ИСПРАВЛЕНО: Использование безопасных оберток для Lampa.Storage
-          if (drxaosSafeGet(key) === undefined) {
-            drxaosSafeSet(key, defaults[key]);
-          }
-        });
+        this.settings.PLATFORM.isAndroid = Lampa.Platform && Lampa.Platform.is("android");
+        this.settings.PLATFORM.isWebOS = Lampa.Platform && Lampa.Platform.is("webos");
+        this.settings.PLATFORM.isTizen = Lampa.Platform && Lampa.Platform.is("tizen");
+        this.settings.PLATFORM.isBrowser = Lampa.Platform && Lampa.Platform.is("browser");
+        this.settings.PLATFORM.isTV = this.settings.PLATFORM.isAndroid || 
+                                      this.settings.PLATFORM.isTizen || 
+                                      this.settings.PLATFORM.isWebOS;
       } catch (e) {
-        log("exitMenuEnsureDefaults error:", e);
+        log('Platform detection error: ' + e.message, 'error');
       }
     }
 
-    function exitMenuGetConfig() {
-      var config = {};
-      ExitMenuConfig.items.forEach(function (item) {
-        // ИСПРАВЛЕНО: Использование безопасных оберток для Lampa.Storage
-        config[item.name] = drxaosSafeGet(item.name, item.defaultValue);
-      });
-      // ИСПРАВЛЕНО: Использование безопасных оберток для Lampa.Storage
-      config.back_plug = drxaosSafeGet("back_plug", true);
-      return config;
+    // Загрузка настроек из хранилища
+    loadSettings() {
+      try {
+        const savedSettings = safeStorageGet('drxaos_supermenu_settings');
+        if (savedSettings) {
+          this.settings = Object.assign(this.settings, JSON.parse(savedSettings));
+        }
+        
+        const scheme = safeStorageGet('drxaos_supermenu_label_scheme', this.settings.LABEL_SCHEME);
+        this.settings.LABEL_SCHEME = scheme;
+        
+        log('Settings loaded');
+      } catch (e) {
+        log('Settings load error: ' + e.message, 'error');
+      }
     }
 
-    function exitMenuSetItem(name, value) {
-      // ИСПРАВЛЕНО: Использование безопасных оберток для Lampa.Storage
-      drxaosSafeSet(name, value);
+    // Сохранение оригинальных методов
+    backupOriginalMethods() {
+      try {
+        if (window.Lampa && Lampa.Template && Lampa.Template.get) {
+          this.originalCreateMenu = Lampa.Template.get;
+        }
+      } catch (e) {
+        log('Backup methods error: ' + e.message, 'error');
+      }
     }
 
-    function exitMenuOpen() {
-      exitMenuEnsureDefaults();
-      var config = exitMenuGetConfig();
-
-      var menu = Lampa.Component.build("settings", {
-        title: "Меню выхода",
-        component: "exit_menu",
-        onBack: function () {
-          Lampa.Activity.backward();
+    // Применение улучшений
+    applyEnhancements() {
+      try {
+        // Улучшение меню
+        if (this.settings.FEATURES.menu_enhanced) {
+          this.enhanceMenu();
         }
-      });
-
-      menu.render().find(".settings-param").empty();
-
-      ExitMenuConfig.items.forEach(function (item) {
-        var value = config[item.name];
-        var component = Lampa.Component.build("settings_select", {
-          title: item.title,
-          value: value,
-          options: ExitMenuConfig.visibilityValues,
-          onChange: function (newValue) {
-            exitMenuSetItem(item.name, newValue);
-            config[item.name] = newValue;
-          }
-        });
-        menu.render().find(".settings-param").append(component.render());
-      });
-
-      var backPlugToggle = Lampa.Component.build("settings_toggle", {
-        title: "Возврат в плагин",
-        value: config.back_plug,
-        onChange: function (newValue) {
-          // ИСПРАВЛЕНО: Использование безопасных оберток для Lampa.Storage
-          drxaosSafeSet("back_plug", newValue);
-          config.back_plug = newValue;
+        
+        // Улучшение карточек
+        if (this.settings.FEATURES.cards_enhanced) {
+          this.enhanceCards();
         }
-      });
-      menu.render().find(".settings-param").append(backPlugToggle.render());
-
-      Lampa.Activity.push({
-        url: "",
-        title: "Меню выхода",
-        component: "exit_menu",
-        page: menu.render(),
-        onBack: function () {
-          Lampa.Activity.backward();
+        
+        // Улучшение деталей
+        if (this.settings.FEATURES.details_expanded) {
+          this.enhanceDetails();
         }
-      });
+        
+        log('Enhancements applied');
+      } catch (e) {
+        log('Apply enhancements error: ' + e.message, 'error');
+      }
     }
 
-    function exitMenuPatch() {
-      if (!SuperMenuConfig.FEATURES.topbar_exit_menu) return;
-
-      Lampa.Listener.follow("app", function (e) {
-        if (e.type === "ready") {
-          var originalExit = Lampa.Controller.prototype.exit;
-          Lampa.Controller.prototype.exit = function () {
-            if (Lampa.Activity.active().component === "exit_menu") {
-              originalExit.apply(this, arguments);
-            } else {
-              exitMenuOpen();
+    // Улучшение меню
+    enhanceMenu() {
+      try {
+        // Переопределяем метод создания меню
+        if (window.Lampa && Lampa.Template && Lampa.Template.get) {
+          const originalGet = Lampa.Template.get;
+          
+          Lampa.Template.get = (name, data = {}) => {
+            let result = originalGet.call(Lampa.Template, name, data);
+            
+            // Добавляем улучшения для меню
+            if (name === 'menu' && this.settings.FEATURES.menu_enhanced) {
+              result = this.createEnhancedMenu(result, data);
             }
+            
+            return result;
           };
         }
-      });
-    }
-
-    // === MADNESS (Hero Mode) ===
-
-    // В оригинальном коде здесь были функции, связанные с Madness/Hero Mode.
-    // Поскольку их код не был предоставлен полностью, я оставляю заглушки,
-    // чтобы не нарушать логику вызовов. В реальном файле они должны быть восстановлены.
-    function madnessPatch() {
-        if (!SuperMenuConfig.FEATURES.madness) return;
-        log("Madness patch activated.");
-        // ... оригинальный код madnessPatch
-    }
-
-    // === LABEL COLORS ===
-
-    function labelColorsPatch() {
-        if (!SuperMenuConfig.FEATURES.label_colors) return;
-        log("Label colors patch activated.");
-        // ... оригинальный код labelColorsPatch
-    }
-
-    // === VOICEOVER TRACKING ===
-
-    function voiceoverTrackingPatch() {
-        if (!SuperMenuConfig.FEATURES.voiceover_tracking) return;
-        log("Voiceover tracking patch activated.");
-        // ... оригинальный код voiceoverTrackingPatch
-    }
-
-    // === BORDERLESS DARK THEME ===
-
-    function borderlessDarkThemePatch() {
-        if (!SuperMenuConfig.FEATURES.borderless_dark_theme) return;
-        log("Borderless dark theme patch activated.");
-        // ... оригинальный код borderlessDarkThemePatch
-    }
-
-    // === ИНИЦИАЛИЗАЦИЯ ===
-
-    // Вызываем все функции инициализации, как это было в оригинальном коде
-    exitMenuPatch();
-    madnessPatch();
-    labelColorsPatch();
-    voiceoverTrackingPatch();
-    borderlessDarkThemePatch();
-
-    log("SuperMenu plugin initialized.");
-  }
-
-  // ============================================================================
-  // СТАНДАРТНАЯ ИНИЦИАЛИЗАЦИЯ ПЛАГИНА LAMPA
-  // ============================================================================
-
-  // Использование более надежного механизма ожидания Lampa и app:ready
-  if (typeof Lampa !== "undefined") {
-    if (window.appready) {
-      init();
-    } else if (Lampa.Listener && typeof Lampa.Listener.follow === "function") {
-      Lampa.Listener.follow("app", function (e) {
-        if (e.type === "ready") init();
-      });
-    } else {
-      // Запасной вариант, если Listener еще не готов
-      var superMenuTimer = setInterval(function () {
-        if (typeof Lampa !== "undefined" && Lampa.Activity) {
-          clearInterval(superMenuTimer);
-          init();
-        }
-      }, 200);
-    }
-  } else {
-    // Если Lampa еще не загружена, ждем ее появления
-    var superMenuTimer = setInterval(function () {
-      if (typeof Lampa !== "undefined") {
-        clearInterval(superMenuTimer);
-        if (window.appready) {
-          init();
-        } else if (Lampa.Listener && typeof Lampa.Listener.follow === "function") {
-          Lampa.Listener.follow("app", function (e) {
-            if (e.type === "ready") init();
-          });
-        } else {
-          init();
-        }
+      } catch (e) {
+        log('Enhance menu error: ' + e.message, 'error');
       }
-    }, 200);
+    }
+
+    // Создание улучшенного меню
+    createEnhancedMenu(html, data) {
+      try {
+        // Добавляем CSS классы для улучшенного меню
+        const enhancedHtml = html.replace(
+          /class="menu"/,
+          'class="menu drxaos-supermenu-enhanced"'
+        );
+        
+        return enhancedHtml;
+      } catch (e) {
+        log('Create enhanced menu error: ' + e.message, 'error');
+        return html;
+      }
+    }
+
+    // Улучшение карточек
+    enhanceCards() {
+      try {
+        // Настраиваем наблюдатель для карточек
+        this.setupCardObserver();
+      } catch (e) {
+        log('Enhance cards error: ' + e.message, 'error');
+      }
+    }
+
+    // Настройка наблюдателя для карточек
+    setupCardObserver() {
+      try {
+        if (window.MutationObserver) {
+          this.observer = new MutationObserver(
+            debounce((mutations) => {
+              mutations.forEach((mutation) => {
+                if (mutation.type === 'childList') {
+                  mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1) { // Element node
+                      this.processCardElement(node);
+                    }
+                  });
+                }
+              });
+            }, this.settings.PERFORMANCE.DEBOUNCE_DELAY)
+          );
+          
+          // Наблюдаем за контейнером контента
+          const contentContainer = document.querySelector('.content');
+          if (contentContainer) {
+            this.observer.observe(contentContainer, {
+              childList: true,
+              subtree: true
+            });
+          }
+        }
+      } catch (e) {
+        log('Setup card observer error: ' + e.message, 'error');
+      }
+    }
+
+    // Обработка элемента карточки
+    processCardElement(element) {
+      try {
+        // Ищем карточки контента
+        const cards = element.querySelectorAll && element.querySelectorAll('.card, .full-card, .torrent-item');
+        if (cards && cards.length) {
+          Array.from(cards).forEach(card => this.enhanceCard(card));
+        }
+        
+        // Также проверяем сам элемент
+        if (element.classList && 
+            (element.classList.contains('card') || 
+             element.classList.contains('full-card') || 
+             element.classList.contains('torrent-item'))) {
+          this.enhanceCard(element);
+        }
+      } catch (e) {
+        log('Process card element error: ' + e.message, 'error');
+      }
+    }
+
+    // Улучшение отдельной карточки
+    enhanceCard(card) {
+      try {
+        if (card.classList.contains('drxaos-enhanced')) return;
+        
+        card.classList.add('drxaos-enhanced');
+        
+        // Применяем цветовые метки
+        if (this.settings.FEATURES.label_colors) {
+          this.applyLabels(card);
+        }
+        
+        // Добавляем индикаторы качества
+        if (this.settings.FEATURES.label_quality) {
+          this.addQualityIndicators(card);
+        }
+        
+        // Добавляем анимации при наведении
+        if (this.settings.FEATURES.cards_hover) {
+          this.addHoverEffects(card);
+        }
+        
+      } catch (e) {
+        log('Enhance card error: ' + e.message, 'error');
+      }
+    }
+
+    // Применение цветовых меток
+    applyLabels(card) {
+      try {
+        const colors = this.settings.LABEL_COLORS[this.settings.LABEL_SCHEME];
+        if (!colors) return;
+        
+        // Находим элементы для меток
+        const typeElement = card.querySelector('.card-type, .item-type');
+        const qualityElement = card.querySelector('.card-quality, .item-quality');
+        
+        // Применяем цвета типа контента
+        if (typeElement) {
+          const typeText = typeElement.textContent.toLowerCase();
+          if (typeText.includes('фильм') || typeText.includes('movie')) {
+            typeElement.style.backgroundColor = colors.TYPE.movie;
+          } else if (typeText.includes('сериал') || typeText.includes('tv')) {
+            typeElement.style.backgroundColor = colors.TYPE.tv;
+          } else if (typeText.includes('аниме') || typeText.includes('anime')) {
+            typeElement.style.backgroundColor = colors.TYPE.anime;
+          }
+        }
+        
+        // Применяем цвета качества
+        if (qualityElement) {
+          const qualityText = qualityElement.textContent.toUpperCase();
+          if (colors.QUALITY[qualityText]) {
+            qualityElement.style.backgroundColor = colors.QUALITY[qualityText];
+          }
+        }
+        
+      } catch (e) {
+        log('Apply labels error: ' + e.message, 'error');
+      }
+    }
+
+    // Добавление индикаторов качества
+    addQualityIndicators(card) {
+      try {
+        // Ищем информацию о качестве в карточке
+        const titleElement = card.querySelector('.card-title, .item-title, .torrent-title');
+        if (!titleElement) return;
+        
+        const title = titleElement.textContent || '';
+        
+        // Определяем качество по названию
+        const quality = this.detectQuality(title);
+        if (quality) {
+          // Создаем индикатор качества
+          const qualityIndicator = document.createElement('div');
+          qualityIndicator.className = 'drxaos-quality-indicator';
+          qualityIndicator.textContent = quality;
+          qualityIndicator.style.cssText = `
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: ${this.settings.LABEL_COLORS[this.settings.LABEL_SCHEME].QUALITY[quality] || '#666'};
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            z-index: 10;
+          `;
+          
+          // Добавляем индикатор к карточке
+          card.style.position = 'relative';
+          card.appendChild(qualityIndicator);
+        }
+        
+      } catch (e) {
+        log('Add quality indicators error: ' + e.message, 'error');
+      }
+    }
+
+    // Определение качества по названию
+    detectQuality(title) {
+      const upperTitle = title.toUpperCase();
+      
+      if (upperTitle.includes('4K') || upperTitle.includes('2160P')) return '4K';
+      if (upperTitle.includes('1080P') || upperTitle.includes('FHD')) return '1080p';
+      if (upperTitle.includes('720P') || upperTitle.includes('HD')) return '720p';
+      if (upperTitle.includes('CAM') || upperTitle.includes('CAMRIP')) return 'CAM';
+      if (upperTitle.includes('HDR')) return 'HDR';
+      
+      return null;
+    }
+
+    // Добавление эффектов при наведении
+    addHoverEffects(card) {
+      try {
+        card.addEventListener('mouseenter', () => {
+          card.style.transform = 'scale(1.02)';
+          card.style.transition = 'transform 0.2s ease';
+        });
+        
+        card.addEventListener('mouseleave', () => {
+          card.style.transform = 'scale(1)';
+        });
+      } catch (e) {
+        log('Add hover effects error: ' + e.message, 'error');
+      }
+    }
+
+    // Улучшение деталей
+    enhanceDetails() {
+      try {
+        // Добавляем CSS для улучшенных деталей
+        this.injectCSS();
+      } catch (e) {
+        log('Enhance details error: ' + e.message, 'error');
+      }
+    }
+
+    // Внедрение CSS стилей
+    injectCSS() {
+      try {
+        const css = `
+          .drxaos-supermenu-enhanced {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+          }
+          
+          .drxaos-enhanced {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+          }
+          
+          .drxaos-enhanced:hover {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+          }
+          
+          .drxaos-quality-indicator {
+            animation: fadeIn 0.3s ease;
+          }
+          
+          @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+          }
+        `;
+        
+        const style = document.createElement('style');
+        style.textContent = css;
+        document.head.appendChild(style);
+        
+        log('CSS injected');
+      } catch (e) {
+        log('Inject CSS error: ' + e.message, 'error');
+      }
+    }
+
+    // Настройка общего наблюдателя
+    setupObserver() {
+      try {
+        // Наблюдаем за изменениями в DOM для динамического применения улучшений
+        if (window.MutationObserver) {
+          const observer = new MutationObserver(
+            debounce(() => {
+              // Применяем улучшения к новым элементам
+              const cards = document.querySelectorAll('.card:not(.drxaos-enhanced), .full-card:not(.drxaos-enhanced), .torrent-item:not(.drxaos-enhanced)');
+              cards.forEach(card => this.enhanceCard(card));
+            }, this.settings.PERFORMANCE.DEBOUNCE_DELAY)
+          );
+          
+          // Наблюдаем за body
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+          
+          log('Observer setup complete');
+        }
+      } catch (e) {
+        log('Setup observer error: ' + e.message, 'error');
+      }
+    }
+
+    // Метод для переключения отладки
+    toggleDebug() {
+      this.settings.DEBUG = !this.settings.DEBUG;
+      safeStorageSet('drxaos_supermenu_debug', this.settings.DEBUG);
+      log('Debug mode: ' + (this.settings.DEBUG ? 'ON' : 'OFF'));
+    }
+
+    // Метод для переключения цветовой схемы
+    toggleColorScheme() {
+      this.settings.LABEL_SCHEME = this.settings.LABEL_SCHEME === 'vivid' ? 'soft' : 'vivid';
+      safeStorageSet('drxaos_supermenu_label_scheme', this.settings.LABEL_SCHEME);
+      
+      // Обновляем существующие карточки
+      const cards = document.querySelectorAll('.drxaos-enhanced');
+      cards.forEach(card => {
+        card.classList.remove('drxaos-enhanced');
+        this.enhanceCard(card);
+      });
+      
+      log('Color scheme changed to: ' + this.settings.LABEL_SCHEME);
+    }
+
+    // Метод для сохранения настроек
+    saveSettings() {
+      try {
+        safeStorageSet('drxaos_supermenu_settings', JSON.stringify(this.settings));
+        log('Settings saved');
+      } catch (e) {
+        log('Save settings error: ' + e.message, 'error');
+      }
+    }
   }
+
+  // ============================================================================
+  // ИНИЦИАЛИЗАЦИЯ ПЛАГИНА
+  // ============================================================================
+
+  // Создаем экземпляр плагина
+  const superMenuPlugin = new SuperMenuPlugin();
+
+  // Функция инициализации
+  function initializePlugin() {
+    try {
+      // Проверяем доступность Lampa
+      if (typeof window.Lampa === 'undefined') {
+        console.error('[DRXAOS SuperMenu] Lampa API not found');
+        return;
+      }
+
+      // Проверяем доступность критических компонентов
+      const requiredComponents = ['Storage', 'Template', 'Platform'];
+      const missingComponents = requiredComponents.filter(comp => !window.Lampa[comp]);
+      
+      if (missingComponents.length > 0) {
+        console.warn('[DRXAOS SuperMenu] Missing components:', missingComponents);
+      }
+
+      // Инициализируем плагин
+      superMenuPlugin.init();
+
+      // Добавляем глобальные методы для управления плагином
+      window.DrxaosSuperMenu = {
+        plugin: superMenuPlugin,
+        toggleDebug: () => superMenuPlugin.toggleDebug(),
+        toggleColorScheme: () => superMenuPlugin.toggleColorScheme(),
+        saveSettings: () => superMenuPlugin.saveSettings()
+      };
+
+      console.log('[DRXAOS SuperMenu] Plugin ready! Use window.DrxaosSuperMenu for control');
+      
+    } catch (error) {
+      console.error('[DRXAOS SuperMenu] Initialization error:', error);
+    }
+  }
+
+  // Регистрируем слушатель событий Lampa
+  if (typeof window.Lampa !== 'undefined' && window.Lampa.Listener) {
+    Lampa.Listener.follow('app', function(event) {
+      if (event.type === 'ready') {
+        // Небольшая задержка для полной загрузки интерфейса
+        setTimeout(initializePlugin, 100);
+      }
+    });
+  } else {
+    // Резервный вариант: инициализация при загрузке DOM
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializePlugin);
+    } else {
+      setTimeout(initializePlugin, 500);
+    }
+  }
+
+  // Экспортируем плагин для глобального доступа
+  window.SuperMenuPlugin = SuperMenuPlugin;
+
 })();
