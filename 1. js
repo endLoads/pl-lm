@@ -78,6 +78,15 @@
         kpApiUrl:   "https://kinopoiskapiunofficial.tech/api/v2.2/films" // базовый URL [web:224]
       },
 
+      VOICEOVER: {
+        enabled: false,  // по умолчанию выключено
+        // Схема хранения:
+        // ключ: contentKey (например, "tt1234567" или "title_2024")
+        // значение: { voiceId: string, lastSeason?: number, lastEpisode?: number, updatedAt: timestamp }
+        cache: Object.create(null)
+      },
+
+
       // Кэш рейтингов на время сессии
       RATING_CACHE: {
         tmdb: Object.create(null),
@@ -823,10 +832,101 @@
       }
     }
 
+    /**
+     * Сохранить выбранную озвучку для контента.
+     * meta: {
+     *   key: string,           // уникальный ключ (например, imdbId, tmdbId или свой id источника)
+     *   title?: string,
+     *   voiceId: string,       // идентификатор озвучки/переводчика
+     *   season?: number,
+     *   episode?: number
+     * }
+     */
+    function rememberVoiceoverSelection(meta) {
+      try {
+        if (!SuperMenuConfig.VOICEOVER.enabled) return;
+        if (!meta || !meta.key || !meta.voiceId) return;
+
+        var cache = SuperMenuConfig.VOICEOVER.cache;
+        var prev = cache[meta.key] || {};
+
+        cache[meta.key] = {
+          voiceId: meta.voiceId,
+          lastSeason: meta.season != null ? meta.season : prev.lastSeason,
+          lastEpisode: meta.episode != null ? meta.episode : prev.lastEpisode,
+          title: meta.title || prev.title || "",
+          updatedAt: Date.now()
+        };
+      } catch (e) {
+        log("rememberVoiceoverSelection error:", e);
+      }
+    }
+
+    /**
+     * Проверка: есть ли новая серия в любимой озвучке.
+     *
+     * meta: {
+     *   key: string,                   // тот же ключ, что и в rememberVoiceoverSelection
+     *   availableVoiceId?: string,     // озвучка, которая сейчас есть у последней серии
+     *   latestSeason?: number,
+     *   latestEpisode?: number
+     * }
+     *
+     * return: { hasUpdate: boolean, reason?: string }
+     */
+    function checkVoiceoverUpdate(meta) {
+      try {
+        if (!SuperMenuConfig.VOICEOVER.enabled) return { hasUpdate: false };
+        if (!meta || !meta.key) return { hasUpdate: false };
+
+        var cache = SuperMenuConfig.VOICEOVER.cache;
+        var prev = cache[meta.key];
+        if (!prev || !prev.voiceId) return { hasUpdate: false };
+
+        // Если текущая озвучка иная, чем любимая — ничего не говорим, источник может не дать нужные данные
+        if (meta.availableVoiceId && meta.availableVoiceId !== prev.voiceId) {
+          return { hasUpdate: false };
+        }
+
+        // Если есть номера сезонов/серий — сравниваем
+        if (Number.isFinite(meta.latestSeason) && Number.isFinite(meta.latestEpisode)
+            && Number.isFinite(prev.lastSeason) && Number.isFinite(prev.lastEpisode)) {
+
+          // Простое сравнение: либо сезон выше, либо в том же сезоне серия выше
+          if (meta.latestSeason > prev.lastSeason
+              || (meta.latestSeason === prev.lastSeason && meta.latestEpisode > prev.lastEpisode)) {
+            return {
+              hasUpdate: true,
+              reason: "Новая серия в озвучке " + prev.voiceId
+            };
+          }
+        }
+
+        return { hasUpdate: false };
+      } catch (e) {
+        log("checkVoiceoverUpdate error:", e);
+        return { hasUpdate: false };
+      }
+    }
+
 
     // Добавляем раздел настроек только один раз
     function registerSettings() {
       try {
+        // Трекинг озвучек (экспериментально)
+        Lampa.SettingsApi.addParam({
+          component: "more",
+          param: {
+            name: "drxaos_supermenu_voiceover_tracking",
+            type: "toggle",
+            default: SuperMenuConfig.FEATURES.voiceover_tracking
+          },
+          field: {
+            name: "Отслеживание озвучек (beta)",
+            description: "Запоминать выбранную озвучку и подсвечивать новые серии в этой озвучке (если источник даёт данные)"
+          }
+        });
+
         // Основной переключатель MADNESS
         Lampa.SettingsApi.addParam({
           component: "more",
@@ -1043,7 +1143,10 @@
         var topbarExit = Lampa.Storage.get("drxaos_supermenu_topbar_exit", SuperMenuConfig.FEATURES.topbar_exit_menu ? "true" : "false") === "true";
         var madnessLevel = Lampa.Storage.get("drxaos_supermenu_madness_level", SuperMenuConfig.FEATURES.madness_level || "normal");
         var borderlessTheme = Lampa.Storage.get("drxaos_supermenu_borderless_dark", SuperMenuConfig.FEATURES.borderless_dark_theme ? "true" : "false") === "true";
-
+        var voiceoverTracking = Lampa.Storage.get(
+          "drxaos_supermenu_voiceover_tracking",
+          SuperMenuConfig.FEATURES.voiceover_tracking ? "true" : "false"
+        ) === "true";
         var kpApiKey = Lampa.Storage.get("drxaos_supermenu_kp_api_key", "");
 
         if (kpApiKey) {
@@ -1057,6 +1160,9 @@
         SuperMenuConfig.FEATURES.label_colors = labelColors;
         SuperMenuConfig.FEATURES.topbar_exit_menu = topbarExit;
         SuperMenuConfig.FEATURES.borderless_dark_theme = borderlessTheme;
+        SuperMenuConfig.FEATURES.voiceover_tracking = voiceoverTracking;
+        SuperMenuConfig.VOICEOVER.enabled = voiceoverTracking;
+
 
         if (labelScheme === "vivid" || labelScheme === "soft") {
           SuperMenuConfig.LABEL_SCHEME = labelScheme;
@@ -1077,6 +1183,33 @@
         log("Ошибка при применении пользовательских настроек:", e);
       }
     }
+
+    // === «Горячее» применение настроек плагина при изменении Storage ===
+    function onSettingsChanged(event) {
+      try {
+        if (!event || !event.name) return;
+
+        var name = event.name;
+
+        // Интересуют только наши ключи
+        if (
+          name === "drxaos_supermenu_madness" ||
+          name === "drxaos_supermenu_madness_level" ||
+          name === "drxaos_supermenu_label_colors" ||
+          name === "drxaos_supermenu_label_scheme" ||
+          name === "drxaos_supermenu_topbar_exit"
+        ) {
+          applyUserSettings();
+          injectBorderlessDarkTheme();   // если флаг темы зависит от настроек, подтянется
+          // MADNESS: переоформим заголовок текущего раздела
+          var titleEl = document.querySelector(".head .head__title, .simple-title, .section__title");
+          if (titleEl) madnessDecorateSectionTitle(titleEl);
+        }
+      } catch (e) {
+        log("onSettingsChanged error:", e);
+      }
+    }
+
 
         // Получить текущий набор цветов для меток
     function getCurrentLabelColors() {
@@ -1130,6 +1263,10 @@
     try {
       window.DrxSuperMenu = window.DrxSuperMenu || {};
 
+      // Озвучки (beta)
+      window.DrxSuperMenu.rememberVoiceoverSelection = rememberVoiceoverSelection;
+      window.DrxSuperMenu.checkVoiceoverUpdate       = checkVoiceoverUpdate;
+
       // Цветовые функции
       window.DrxSuperMenu.colorizeLabelsInContainer = colorizeLabelsInContainer;
 
@@ -1148,6 +1285,15 @@
     injectBorderlessDarkTheme();
     registerTopBarButton();
     initMadnessSectionHooks();
+
+    // Подписка на изменения настроек/Storage
+    try {
+      if (Lampa.Storage && Lampa.Storage.listener && Lampa.Storage.listener.follow) {
+        Lampa.Storage.listener.follow("change", onSettingsChanged);
+      }
+    } catch (e) {
+      log("Не удалось подписаться на Storage change:", e);
+    }
 
 
 
