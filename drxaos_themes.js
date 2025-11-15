@@ -10542,6 +10542,25 @@ function initMovieQualitySystem(jacredUrl) {
                         return;
                     }
                     addQualityToMiniCard(card, cardData);
+                          // === РАСКРАСКА МЕТОК ТИПА И КАЧЕСТВА ===
+      try {
+        if (window.colorizeLabelsInContainer) {
+          // Определяем тип карточки ('movie' или 'tv')
+          var cardType = drxaosResolveCardType(cardData.payload || cardData, card);
+
+          // Пытаемся вытащить качество так же, как для бейджа качества
+          var inlineQuality = extractInlineQuality(cardData.payload || cardData, card);
+
+          window.colorizeLabelsInContainer(card, {
+            type: cardType || null,
+            quality: inlineQuality || null
+          });
+        }
+      } catch (e) {
+        logError("colorizeLabelsInContainer failed", e);
+      }
+      // === КОНЕЦ БЛОКА РАСКРАСКИ ===
+
                     colorizeCardVotes(card);
                     moveCardAgeToPoster(card);
                     drxaosPrefetchTitleLogo(cardData);
