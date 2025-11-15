@@ -3,11 +3,12 @@
 
   function init() {
     if (typeof Lampa === "undefined") return;
+log("init(): SuperMenuConfig =", SuperMenuConfig);
 
     // === БАЗОВАЯ КОНФИГУРАЦИЯ ПЛАГИНА ===
     var SuperMenuConfig = {
-      DEBUG: false,
-      VERBOSE_LOGGING: false,
+      DEBUG: true,
+      VERBOSE_LOGGING: true,
 
       // Профиль производительности (базовый)
       PERFORMANCE: {
@@ -1280,42 +1281,57 @@
     }
 
     // === ЗАПУСК ===
+log("init(): calling registerSettings/applyUserSettings/...");
     registerSettings();
     applyUserSettings();
     injectBorderlessDarkTheme();
     registerTopBarButton();
     initMadnessSectionHooks();
+log("init(): after register*/apply*/inject*/registerTopBarButton/initMadnessSectionHooks");
 
     try {
-      if (
-        Lampa.Storage &&
-        Lampa.Storage.listener &&
-        Lampa.Storage.listener.follow
-      ) {
-        Lampa.Storage.listener.follow("change", onSettingsChanged);
-      }
-    } catch (e) {
-      log("Storage listener attach error:", e);
+    if (
+      Lampa.Storage &&
+      Lampa.Storage.listener &&
+      Lampa.Storage.listener.follow
+    ) {
+      Lampa.Storage.listener.follow("change", onSettingsChanged);
+      log("init(): Storage.listener.follow attached");
+    } else {
+      log("init(): Storage.listener.follow not available");
     }
+  } catch (e) {
+    log("Storage listener attach error:", e);
   }
+}
 
-    // === ЗАПУСК ПЛАГИНА ===
+      // === ЗАПУСК ПЛАГИНА ===
   function bootstrapSuperMenu() {
     try {
-      if (typeof Lampa === "undefined") return;
+      if (typeof Lampa === "undefined") {
+        log("bootstrapSuperMenu: Lampa undefined, exit");
+        return;
+      }
+
+      log("bootstrapSuperMenu: appready =", window.appready);
 
       if (window.appready) {
-        // Приложение уже готово — просто запускаем init()
+        log("bootstrapSuperMenu: appready=true, calling init()");
         init();
       } else if (Lampa.Listener && typeof Lampa.Listener.follow === "function") {
-        // Ждём события ready от приложения
+        log("bootstrapSuperMenu: appready=false, listen app:ready");
         Lampa.Listener.follow("app", function (e) {
           try {
-            if (e.type === "ready") init();
+            if (e.type === "ready") {
+              log("bootstrapSuperMenu: app:ready event, calling init()");
+              init();
+            }
           } catch (err) {
             log("SuperMenu init on app:ready error:", err);
           }
         });
+      } else {
+        log("bootstrapSuperMenu: no Lampa.Listener.follow, cannot attach");
       }
     } catch (e) {
       log("bootstrapSuperMenu error:", e);
@@ -1324,11 +1340,14 @@
 
   // Ждём появления Lampa, если плагин подцепился слишком рано
   if (typeof Lampa !== "undefined") {
+    log("bootstrapSuperMenu: Lampa detected immediately");
     bootstrapSuperMenu();
   } else {
+    log("bootstrapSuperMenu: wait Lampa with timer");
     var superMenuTimer = setInterval(function () {
       if (typeof Lampa !== "undefined") {
         clearInterval(superMenuTimer);
+        log("bootstrapSuperMenu: Lampa detected in timer, bootstrap");
         bootstrapSuperMenu();
       }
     }, 200);
