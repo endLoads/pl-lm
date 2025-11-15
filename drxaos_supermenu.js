@@ -1272,6 +1272,41 @@ try {
   log("Export DrxSuperMenu API error:", e);
 }
 
+ // ================== ОСНОВНОЙ START ==================
+
+  function start() {
+    try {
+      log("start()");
+      if (typeof Lampa === "undefined") {
+        log("Lampa is undefined in start, abort");
+        return;
+      }
+
+      try {
+        SuperMenuConfig.PLATFORM.isAndroid = Lampa.Platform.is("android");
+        SuperMenuConfig.PLATFORM.isWebOS = Lampa.Platform.is("webos");
+        SuperMenuConfig.PLATFORM.isTizen = Lampa.Platform.is("tizen");
+        SuperMenuConfig.PLATFORM.isBrowser = Lampa.Platform.is("browser");
+        SuperMenuConfig.PLATFORM.isTV =
+          SuperMenuConfig.PLATFORM.isAndroid ||
+          SuperMenuConfig.PLATFORM.isTizen ||
+          SuperMenuConfig.PLATFORM.isWebOS ||
+          Lampa.Platform.is("orsay") ||
+          Lampa.Platform.is("netcast");
+      } catch (e) {
+        log("Platform detection error:", e);
+      }
+
+      registerSettingsComponent();
+      registerTopBarButton();
+      exportApi();
+
+      log("start() finished");
+    } catch (e) {
+      log("start() error:", e);
+    }
+  }
+
 // === ЗАПУСК ПЛАГИНА ===
 function bootstrapSuperMenu() {
   try {
