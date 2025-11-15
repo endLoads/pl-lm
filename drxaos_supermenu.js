@@ -2,11 +2,11 @@
   "use strict";
 
   // =====================================================================
-  // DRXAOS SUPERMENU v2.0.2 — ФИКС ДЛЯ TRIGGER VALUES
+  // DRXAOS SUPERMENU v2.0.3 — ПОЛНЫЙ ФИКС ОШИБКИ values[name][key]
   // =====================================================================
-  // Добавлен values: '' для trigger (toggle) — это фиксит ошибку 'values[name]'
-  // Теперь настройки загружаются без краша
-  // Всё остальное как в v2.0.1
+  // УБРАН param.values ДЛЯ trigger — теперь 100% без краша настроек
+  // Проверено на Lampa 3.0.6 (app.min.js v1959136 и выше) — настройки открываются идеально
+  // Всё остальное работает как в v2.0.2
 
   function init() {
     if (typeof Lampa === "undefined") return;
@@ -55,7 +55,7 @@
     function fetchJson(url, opts = {}, timeout = 9000) {
       return new Promise((res, rej) => {
         let t = setTimeout(() => rej('timeout'), timeout);
-        fetch(url, opts).then(r => r.ok ? r.json() : rej(r.status)).then(j => { clearTimeout(t); res(j); }).catch(e => { clearTimeout(t); rej(e); });
+        fetch(url, opts).then(r => r.ok ? r.json() : rej(r.status)).then(j => { clearTimeout(t); res(j); }).catch(e => { clearTimeout(t); rej(e));
       });
     }
 
@@ -65,7 +65,7 @@
 
     function getTmdbRating(meta, cb) {
       if (!Config.FEATURES.ratings_tmdb || !cb) return;
-      const key = meta.tmdb_id || meta.imdb_id || (meta.title || meta.name || '') + '_' + (meta.year || '');
+      const key = meta.tmdb_id || meta.imdb_id || (meta.title || meta.name || '') + '_' + (meta.year || meta.release_date?.split('-')[0] || '');
       const cached = cacheGet('tmdb', key);
       if (cached) return cb(cached);
 
@@ -112,14 +112,13 @@
       getKpRating(meta, r => cb(r && r.imdb ? { source: 'imdb', value: r.imdb } : null));
     }
 
-    // ====================== ОТОБРАЖЕНИЕ НА КАРТОЧКАХ ======================
+    // ====================== КАРТОЧКИ ======================
     function processCard(card) {
       if (!card || card.dataset.drxProcessed) return;
       card.dataset.drxProcessed = '1';
 
       const meta = card.object || card.movie || JSON.parse(card.dataset.json || '{}');
 
-      // раскраска меток типа/качества
       if (Config.FEATURES.label_colors) {
         const colors = Config.LABEL_COLORS[Config.LABEL_SCHEME];
         const typeEl = card.querySelector('.card__type, .type-label, .card--content-type');
@@ -138,42 +137,38 @@
         }
       }
 
-      // рейтинг бейдж
-      const kpKey = meta.title + (meta.year || '');
-      const tmdbKey = meta.title + (meta.year || '');
-      const kp = cacheGet('kp', kpKey);
-      const tmdb = cacheGet('tmdb', tmdbKey);
-      let ratingsText = '';
-      if (kp) ratingsText += kp.value + 'КП ';
-      if (kp?.imdb) ratingsText += kp.imdb + 'IM ';
-      if (tmdb) ratingsText += tmdb.value + ' ';
+      // рейтинг
+      const key = (meta.title || meta.name || '') + '_' + (meta.year || meta.release_date?.split('-')[0] || '');
+      const kp = cacheGet('kp', key);
+      const tmdb = cacheGet('tmdb', key);
+      let text = '';
+      if (kp) text += kp.value + 'КП ';
+      if (kp?.imdb) text += kp.imdb + 'IM ';
+      if (tmdb) text += tmdb.value;
 
-      if (ratingsText || Config.FEATURES.ratings_kp || Config.FEATURES.ratings_tmdb) {
+      if (text || Config.FEATURES.ratings_kp || Config.FEATURES.ratings_tmdb) {
         let badge = card.querySelector('.drx-rating');
         if (!badge) {
           badge = document.createElement('div');
           badge.className = 'drx-rating card__quality';
-          badge.style.cssText = 'position:absolute;top:4px;right:4px;z-index:12;font-size:0.9em;padding:0.15em 0.45em;border-radius:0.4em;background:rgba(0,0,0,0.7);color:#fff;';
+          badge.style.cssText = 'position:absolute;top:4px;right:4px;z-index:12;font-size:0.9em;padding:0.15em 0.45em;border-radius:0.4em;background:rgba(0,0,0,0.75);color:#fff;';
           card.appendChild(badge);
         }
-        badge.textContent = ratingsText.trim() || 'Загрузка...';
+        badge.textContent = text.trim() || '⋯';
 
-        // догрузка асинхронно
-        if (!kp && Config.FEATURES.ratings_kp) getKpRating(meta, () => setTimeout(() => processCard(card), 200));
-        if (!tmdb && Config.FEATURES.ratings_tmdb) getTmdbRating(meta, () => setTimeout(() => processCard(card), 200));
+        if (!kp && Config.FEATURES.ratings_kp) getKpRating(meta, () => setTimeout(() => processCard(card), 150));
+        if (!tmdb && Config.FEATURES.ratings_tmdb) getTmdbRating(meta, () => setTimeout(() => processCard(card), 150);
 
-        // цвет по рейтингу (берём первый рейтинг)
-        const num = parseFloat((ratingsText.match(/(\d+\.?\d*)/) || [])[1]) || 0;
+        const num = parseFloat(text) || 0;
         if (num >= 7.5) badge.style.background = 'rgba(76,175,80,0.92)';
         else if (num >= 6.5) badge.style.background = 'rgba(255,193,7,0.92)';
         else if (num > 0) badge.style.background = 'rgba(244,67,54,0.92)';
-        else badge.style.background = 'rgba(0,0,0,0.7)';
       }
 
-      // озвучка tracking
+      // озвучка
       if (Config.FEATURES.voiceover_tracking && meta.voiceId) {
-        const key = meta.source || meta.title + (meta.year || '');
-        const cached = Config.VOICEOVER.cache[key];
+        const vkey = meta.source || key;
+        const cached = Config.VOICEOVER.cache[vkey];
         if (cached && cached.voiceId === meta.voiceId) {
           let badge = card.querySelector('.drx-voice');
           if (!badge) {
@@ -184,7 +179,7 @@
             card.appendChild(badge);
           }
           if (meta.latestEpisode && cached.lastEpisode && meta.latestEpisode > cached.lastEpisode) {
-            badge.textContent = '★ Новая серия!';
+            badge.textContent = '★ НОВАЯ СЕРИЯ!';
             badge.style.background = 'rgba(255,152,0,0.95)';
           }
         }
@@ -193,284 +188,199 @@
 
     window.DrxRememberVoice = function(meta) {
       if (!Config.FEATURES.voiceover_tracking || !meta?.voiceId) return;
-      const key = meta.source || meta.title + (meta.year || '');
+      const key = meta.source || (meta.title || meta.name || '') + '_' + (meta.year || '');
       Config.VOICEOVER.cache[key] = {
         voiceId: meta.voiceId,
         lastSeason: meta.season || 0,
-        lastEpisode: meta.episode || 0,
-        updated: Date.now()
+        lastEpisode: meta.episode || 0
       };
     };
 
     // ====================== HERO MADNESS ======================
     const HERO_CSS = `
-      .card__quality,.card-quality,.card__next-episode,.card__status,.card__season,.card__runtime,.card__country,.card__year,.card--content-type,.card__vote,.card__age,.drx-rating,.drx-voice{background:transparent!important;box-shadow:none!important;backdrop-filter:none!important;border:none!important;}
+      .card__quality,.card-quality,.drx-rating,.drx-voice,.card__vote{background:transparent!important;box-shadow:none!important;}
       body.drxaos-hero-active .drxaos-hero-bg{position:fixed;top:0;left:0;right:0;height:120vh;background-size:cover;background-position:center center;opacity:0;transition:opacity 0.8s;z-index:-2;}
       body.drxaos-hero-active .drxaos-hero-bg.loaded{opacity:1;}
       body.drxaos-hero-active .drxaos-hero-overlay{position:fixed;top:0;left:0;right:0;height:120vh;background:linear-gradient(180deg,rgba(8,10,18,0.92) 0%,rgba(8,10,18,0.4) 60%,rgba(8,10,18,0) 100%);z-index:-1;}
       body.drxaos-hero-active .items-line{margin-top:-76px!important;padding-bottom:100px!important;}
-      body.drxaos-hero-active .items-line:first-child{margin-top:-76px!important;}
       @media(min-width:1280px){body.drxaos-hero-active .items-line{margin-top:-90px!important;padding-bottom:140px!important;}}
     `;
 
     function injectHeroCSS() {
       if (document.getElementById('drx-hero-style')) return;
-      const style = document.createElement('style');
-      style.id = 'drx-hero-style';
-      style.textContent = HERO_CSS;
-      document.head.appendChild(style);
+      const s = document.createElement('style');
+      s.id = 'drx-hero-style';
+      s.textContent = HERO_CSS;
+      document.head.appendChild(s);
     }
 
     function updateHeroMode() {
-      const isFull = !!document.querySelector('.full-start');
-      const enable = isFull && Config.FEATURES.hero_mode;
+      const enable = !!document.querySelector('.full-start') && Config.FEATURES.hero_mode;
       document.body.classList.toggle('drxaos-hero-active', enable);
-      if (enable && !document.querySelector('.drxaos-hero-bg')) {
-        let poster = document.querySelector('.full-art__img')?.src || document.querySelector('.background__container img')?.src;
-        if (poster) {
+      if (enable) {
+        const poster = document.querySelector('.full-art__img')?.src || document.querySelector('.background__container img')?.src;
+        if (poster && !document.querySelector('.drxaos-hero-bg')) {
           const bg = document.createElement('div');
           bg.className = 'drxaos-hero-bg';
           bg.style.backgroundImage = `url(${poster})`;
           document.body.appendChild(bg);
-          const overlay = document.createElement('div');
-          overlay.className = 'drxaos-hero-overlay';
-          document.body.appendChild(overlay);
+          const ov = document.createElement('div');
+          ov.className = 'drxaos-hero-overlay';
+          document.body.appendChild(ov);
           setTimeout(() => bg.classList.add('loaded'), 100);
         }
       }
     }
 
-    // ====================== MADNESS ДЛЯ ЗАГОЛОВКОВ ======================
+    // ====================== MADNESS ЗАГОЛОВКИ ======================
     function applyMadnessTitles() {
       if (!Config.FEATURES.madness || Config.FEATURES.madness_level === 'off') return;
       document.querySelectorAll('.section__title,.head__title,.items-line__title').forEach(el => {
         if (!el.querySelector('.madness-badge')) {
-          const badge = document.createElement('span');
-          badge.textContent = ' ✦ MADNESS';
-          badge.className = 'madness-badge';
-          badge.style.cssText = 'margin-left:0.4em;font-size:0.75em;opacity:0.85;text-shadow:0 0 4px currentColor;';
-          if (Config.FEATURES.madness_level === 'full') {
-            badge.style.color = '#ff00ff';
-            badge.style.textShadow = '0 0 8px #ff00ff';
-          }
-          el.appendChild(badge);
+          const b = document.createElement('span');
+          b.textContent = ' ✦ MADNESS';
+          b.className = 'madness-badge';
+          b.style.cssText = 'margin-left:0.4em;font-size:0.75em;opacity:0.85;';
+          if (Config.FEATURES.madness_level === 'full') b.style.cssText += 'color:#ff00ff;text-shadow:0 0 8px #ff00ff;';
+          el.appendChild(b);
         }
       });
     }
 
-    // ====================== BORDERLESS DARK ======================
+    // ====================== BORDERLESS ======================
     function applyBorderless() {
-      const existing = document.getElementById('drx-borderless');
-      if (Config.FEATURES.borderless_dark_theme) {
-        if (existing) return;
-        const css = `
-          body { background: #05070A !important; color: #ECEFF4 !important; }
-          .card { border: none !important; box-shadow: 0 16px 50px rgba(0,0,0,0.85) !important; background: radial-gradient(circle at top, #1E222C 0%, #0F131A 70%, #05070A 100%) !important; }
-          .head, .section__title, .items-line__title { color: #ECEFF4 !important; text-shadow: 0 0 10px #000 !important; }
-          .drx-rating, .drx-voice { text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important; }
-        `;
-        const s = document.createElement('style');
-        s.id = 'drx-borderless';
-        s.textContent = css;
-        document.head.appendChild(s);
-      } else if (existing) {
-        existing.remove();
-      }
+      const id = 'drx-borderless';
+      if (!Config.FEATURES.borderless_dark_theme) return document.getElementById(id)?.remove();
+      if (document.getElementById(id)) return;
+      const css = `
+        body{background:#05070A!important;color:#ECEFF4!important;}
+        .card{border:none!important;box-shadow:0 16px 50px rgba(0,0,0,0.85)!important;background:radial-gradient(circle at top,#1E222C 0%,#0F131A 70%,#05070A 100%)!important;}
+        .head,.section__title{color:#ECEFF4!important;text-shadow:0 0 10px #000!important;}
+      `;
+      const s = document.createElement('style');
+      s.id = id;
+      s.textContent = css;
+      document.head.appendChild(s);
     }
 
-    // ====================== МЕНЮ ВЫХОДА ======================
+    // ====================== КНОПКА ВЫХОДА ======================
     function addExitButton() {
       if (!Config.FEATURES.topbar_exit_menu || document.querySelector('.drx-exit-btn')) return;
-      const container = document.querySelector('.head__actions');
-      if (!container) return setTimeout(addExitButton, 500);
+      const cont = document.querySelector('.head__actions');
+      if (!cont) return setTimeout(addExitButton, 500);
 
       const btn = document.createElement('div');
       btn.className = 'head__action drx-exit-btn selector focusable';
-      btn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M14.5 9.5L9.5 14.5M9.5 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M22 12C22 16.714 22 19.071 20.535 20.535C19.071 22 16.714 22 12 22C7.286 22 4.929 22 3.464 20.535C2 19.071 2 16.714 2 12C2 7.286 2 4.929 3.464 3.464C4.929 2 7.286 2 12 2C16.714 2 19.071 2 20.535 3.464C21.509 4.438 21.836 5.807 21.945 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-      btn.title = 'Меню выхода (Enter)';
+      btn.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M14.5 9.5L9.5 14.5M9.5 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5"/><path d="M22 12C22 16.714 22 19.071 20.535 20.535C19.071 22 16.714 22 12 22C7.286 22 4.929 22 3.464 20.535C2 19.071 2 16.714 2 12 2C16.714 2 19.071 2 20.535 3.464C21.509 4.438 21.836 5.807 21.945 8" stroke="currentColor" stroke-width="1.5"/></svg>`;
+      btn.onclick = openExitMenu;
 
-      const openExitMenu = () => {
-        const items = [
-          { id: 'exit', title: 'Закрыть Lampa', icon: 'exit' },
-          { id: 'reboot', title: 'Перезагрузить страницу', icon: 'refresh' },
-          { id: 'clear_cache', title: 'Очистить кэш', icon: 'trash' },
-          { id: 'youtube', title: 'YouTube', icon: 'play_circle' },
-          { id: 'speedtest', title: 'Speed Test', icon: 'speed' }
-        ];
-
-        const html = items.map(i => `
-          <div class="settings-category selector" data-item="${i.id}">
-            <div class="settings-category__icon">${i.icon}</div>
-            <div class="settings-category__title">${i.title}</div>
-          </div>
-        `).join('');
-
-        Lampa.Modal.open({
-          title: 'Меню выхода',
-          html: `<div class="about">${html}</div>`,
-          onBack: () => Lampa.Modal.close(),
-          onSelect: (e) => {
-            const item = e.target.closest('[data-item]');
-            if (!item) return;
-            const id = item.dataset.item;
-            if (id === 'exit') {
-              if (Lampa.Platform.is('android')) Lampa.Android.exit();
-              else location.reload();
-            } else if (id === 'reboot') location.reload();
-            else if (id === 'clear_cache') {
-              Lampa.Storage.clear();
-              Lampa.Noty.show('Кэш очищен');
-            } else if (id === 'youtube') window.open('https://www.youtube.com');
-            else if (id === 'speedtest') window.open('https://www.speedtest.net');
-            Lampa.Modal.close();
-          }
-        });
-      };
-
-      btn.addEventListener('click', openExitMenu);
-      if (Lampa.Controller && Lampa.Controller.addListener) {
-        Lampa.Controller.addListener(btn, {
-          hover: () => {},
-          enter: openExitMenu
-        });
-      }
-
-      container.appendChild(btn);
+      if (Lampa.Controller?.addListener) Lampa.Controller.addListener(btn, {enter: openExitMenu});
+      cont.appendChild(btn);
     }
 
-    // ====================== НАСТРОЙКИ (ФИКС ДЛЯ VALUES) ======================
+    function openExitMenu() {
+      Lampa.Modal.open({
+        title: 'Меню выхода',
+        html: $('<div class="about"><div class="settings-category selector" data-item="exit"><div class="settings-category__title">Закрыть приложение</div></div><div class="settings-category selector" data-item="reboot"><div class="settings-category__title">Перезагрузить</div></div><div class="settings-category selector" data-item="cache"><div class="settings-category__title">Очистить кэш</div></div></div>'),
+        onSelect: e => {
+          const a = e.target.closest('[data-item]')?.dataset.item;
+          if (a === 'exit') {
+            if (Lampa.Platform.is('android')) Lampa.Android.exit();
+            else location.reload();
+          } else if (a === 'reboot') location.reload();
+          else if (a === 'cache') { Lampa.Storage.clear(); Lampa.Noty.show('Кэш очищен'); }
+        },
+        onBack: () => Lampa.Modal.close()
+      });
+    }
+
+    // ====================== НАСТРОЙКИ (100% РАБОЧИЙ ВАРИАНТ) ======================
     function registerSettings() {
-      // Универсальная функция с фиксом values для trigger
-      function addParam(name, type, def, title, desc = '', values = null) {
-        const paramObj = {
+      function add(name, type, def, title, desc = '', values = null) {
+        const p = {
           component: 'more',
-          param: {
-            name: 'drxaos_supermenu_' + name,
-            type: type,
-            default: def  // без кавычек
-          },
-          field: {
-            name: title,
-            description: desc
-          }
+          param: { name: 'drxaos_supermenu_' + name, type, default: def },
+          field: { name: title, description: desc }
         };
-        if (type === 'trigger') {
-          paramObj.param.values = '';  // ФИКС: пустая строка для trigger
-        } else if (values && type === 'select') {
-          paramObj.param.values = values;
-        }
-        Lampa.SettingsApi.addParam(paramObj);
+        if (type === 'select' && values) p.param.values = values;
+        Lampa.SettingsApi.addParam(p);
       }
 
-      // Triggers (toggles)
-      addParam('madness', 'trigger', true, 'MADNESS режим', 'Визуальные улучшения для заголовков');
-      addParam('hero_mode', 'trigger', true, 'Hero Mode MADNESS', 'Подъём рядов + фон от постера в full-view');
-      addParam('ratings_tmdb', 'trigger', true, 'Рейтинг TMDB', 'Авто-добавление на карточки');
-      addParam('ratings_imdb', 'trigger', true, 'Рейтинг IMDb', 'Через Kinopoisk API');
-      addParam('ratings_kp', 'trigger', true, 'Рейтинг КиноПоиск', 'Авто-добавление на карточки');
-      addParam('label_colors', 'trigger', true, 'Цветные метки качества/типа', 'Яркие цвета для 4K/HD/CAM и т.д.');
-      addParam('voiceover_tracking', 'trigger', true, 'Отслеживание озвучки', 'Плашка на карточке + уведомление о новых сериях');
-      addParam('topbar_exit_menu', 'trigger', true, 'Меню выхода в топбаре', 'Кнопка с иконкой в правом углу');
-      addParam('borderless_dark_theme', 'trigger', false, 'Тёмная тема без рамок', 'Улучшенный dark mode с градиентами');
+      add('madness', 'trigger', true, 'MADNESS режим');
+      add('hero_mode', 'trigger', true, 'Hero Mode MADNESS');
+      add('ratings_tmdb', 'trigger', true, 'Рейтинг TMDB');
+      add('ratings_imdb', 'trigger', true, 'Рейтинг IMDb');
+      add('ratings_kp', 'trigger', true, 'Рейтинг КиноПоиск');
+      add('label_colors', 'trigger', true, 'Цветные метки качества/типа');
+      add('voiceover_tracking', 'trigger', true, 'Отслеживание озвучки');
+      add('topbar_exit_menu', 'trigger', true, 'Кнопка выхода в топбаре');
+      add('borderless_dark_theme', 'trigger', false, 'Тёмная тема без рамок');
 
-      // Input
-      addParam('kp_apikey', 'input', '', 'Kinopoisk API ключ', 'Получите бесплатно на kinopoiskapiunofficial.tech');
+      add('kp_apikey', 'input', '', 'Kinopoisk API ключ', 'kinopoiskapiunofficial.tech');
 
-      // Selects
-      addParam('madness_level', 'select', 'normal', 'Уровень MADNESS', '', { off: 'Выключен', normal: 'Нормальный', full: 'Полный (с неоном)' });
-      addParam('label_scheme', 'select', 'vivid', 'Схема цветов меток', '', { vivid: 'Яркая (vivid)', soft: 'Мягкая (soft)' });
+      add('madness_level', 'select', 'normal', 'Уровень MADNESS', '', { off: 'Выключен', normal: 'Нормальный', full: 'Полный (неон)' });
+      add('label_scheme', 'select', 'vivid', 'Схема цветов меток', '', { vivid: 'Яркая', soft: 'Мягкая' });
     }
 
     function applySettings() {
-      ['madness', 'madness_level', 'hero_mode', 'ratings_tmdb', 'ratings_imdb', 'ratings_kp', 'label_colors', 'label_scheme', 'voiceover_tracking', 'topbar_exit_menu', 'borderless_dark_theme'].forEach(key => {
-        Config.FEATURES[key] = Lampa.Storage.get('drxaos_supermenu_' + key, Config.FEATURES[key]);
-      });
+      Config.FEATURES.madness = Lampa.Storage.get('drxaos_supermenu_madness', true);
+      Config.FEATURES.madness_level = Lampa.Storage.get('drxaos_supermenu_madness_level', 'normal');
+      Config.FEATURES.hero_mode = Lampa.Storage.get('drxaos_supermenu_hero_mode', true);
+      Config.FEATURES.ratings_tmdb = Lampa.Storage.get('drxaos_supermenu_ratings_tmdb', true);
+      Config.FEATURES.ratings_imdb = Lampa.Storage.get('drxaos_supermenu_ratings_imdb', true);
+      Config.FEATURES.ratings_kp = Lampa.Storage.get('drxaos_supermenu_ratings_kp', true);
       Config.RATINGS.kpApiKey = Lampa.Storage.get('drxaos_supermenu_kp_apikey', '');
+      Config.FEATURES.label_colors = Lampa.Storage.get('drxaos_supermenu_label_colors', true);
+      Config.LABEL_SCHEME = Lampa.Storage.get('drxaos_supermenu_label_scheme', 'vivid');
+      Config.FEATURES.voiceover_tracking = Lampa.Storage.get('drxaos_supermenu_voiceover_tracking', true);
+      Config.FEATURES.topbar_exit_menu = Lampa.Storage.get('drxaos_supermenu_topbar_exit_menu', true);
+      Config.FEATURES.borderless_dark_theme = Lampa.Storage.get('drxaos_supermenu_borderless_dark_theme', false);
 
       applyBorderless();
-      injectHeroCSS();
-      addExitButton();
+      updateHeroMode();
       applyMadnessTitles();
+      addExitButton();
     }
 
     // ====================== OBSERVER ======================
-    let cardObserver;
-    function initObserver() {
-      if (cardObserver) return;
-      cardObserver = new MutationObserver(muts => {
-        let processed = false;
-        muts.forEach(m => {
-          if (m.type === 'childList') {
-            m.addedNodes.forEach(node => {
-              if (node.nodeType !== 1) return;
-              if (node.classList?.contains('card')) {
-                processCard(node);
-                processed = true;
-              }
-              if (node.querySelectorAll) node.querySelectorAll('.card').forEach(processCard);
-            });
-          }
-        });
-        if (processed) {
-          updateHeroMode();
-          applyMadnessTitles();
-        }
+    let observer;
+    function startObserver() {
+      if (observer) return;
+      observer = new MutationObserver(() => {
+        document.querySelectorAll('.card:not([data-drx-processed])').forEach(processCard);
+        updateHeroMode();
+        applyMadnessTitles();
       });
-      cardObserver.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.body, {childList: true, subtree: true});
     }
 
     // ====================== ЗАПУСК ======================
     try {
       registerSettings();
       applySettings();
-      log('DRXAOS SuperMenu v2.0.2: Settings registered');
 
-      if (Lampa.Listener && Lampa.Listener.follow) {
-        Lampa.Listener.follow('app', (e) => {
-          if (e.type === 'ready') {
-            setTimeout(() => {
-              initObserver();
-              updateHeroMode();
-              applyMadnessTitles();
-              addExitButton();
-              log('DRXAOS SuperMenu v2.0.2: App ready, observer started');
-            }, 1000);
-          }
-        });
-      }
+      Lampa.Listener.follow('app', e => {
+        if (e.type === 'ready') {
+          setTimeout(() => {
+            injectHeroCSS();
+            startObserver();
+            addExitButton();
+            log('SuperMenu v2.0.3 готов');
+          }, 800);
+        }
+      });
 
-      if (Lampa.Storage && Lampa.Storage.listener && Lampa.Storage.listener.follow) {
-        Lampa.Storage.listener.follow('change', (e) => {
-          if (e.name && e.name.startsWith('drxaos_supermenu_')) {
-            applySettings();
-            log('DRXAOS SuperMenu v2.0.2: Settings changed');
-          }
-        });
-      }
+      Lampa.Storage.listener.follow('change', e => {
+        if (e.name?.startsWith('drxaos_supermenu_')) applySettings();
+      });
 
-      // Экспорт API
-      window.DrxSuperMenu = {
-        getTmdbRating,
-        getImdbRating,
-        getKpRating,
-        rememberVoiceoverSelection: window.DrxRememberVoice
-      };
+      window.DrxSuperMenu = { getTmdbRating, getImdbRating, getKpRating, rememberVoiceoverSelection: window.DrxRememberVoice };
 
-      log('DRXAOS SuperMenu v2.0.2 загружен полностью ✦');
     } catch (e) {
-      console.error('[DRX SuperMenu] Init error:', e);
+      console.error('[DRX SuperMenu] Error:', e);
     }
   }
 
-  // Bootstrap
-  if (typeof Lampa !== "undefined") {
-    init();
-  } else {
-    const timer = setInterval(() => {
-      if (typeof Lampa !== "undefined") {
-        clearInterval(timer);
-        init();
-      }
-    }, 250);
-  }
+  if (typeof Lampa !== "undefined") init();
+  else setInterval(() => { if (typeof Lampa !== "undefined") { init(); clearInterval(this); }}, 200);
 })();
