@@ -10561,8 +10561,58 @@ function initMovieQualitySystem(jacredUrl) {
       }
       // === КОНЕЦ БЛОКА РАСКРАСКИ ===
 
-                    colorizeCardVotes(card);
-                    moveCardAgeToPoster(card);
+                          colorizeCardVotes(card);
+
+      // === РЕЙТИНГ КИНОПОИСК (KP) НА КАРТОЧКЕ ===
+      try {
+        if (window.DrxSuperMenu && window.DrxSuperMenu.getKpRating) {
+          // Пытаемся вытащить базовые данные о тайтле
+          var title = cardData.title || cardData.name || "";
+          var year  = cardData.year  || cardData.release_year || cardData.first_air_date && String(cardData.first_air_date).slice(0, 4) || "";
+          var kpId  = cardData.kp_id || cardData.kinopoisk_id || null;
+
+          if (title) {
+            window.DrxSuperMenu.getKpRating({
+              title: title,
+              year: year ? Number(year) : undefined,
+              kpId: kpId
+            }, function (res) {
+              try {
+                if (!res || !isFinite(res.value)) return;
+
+                // Ищем блок голосов/рейтинга на карточке
+                var voteEl = card.querySelector(".cardvote, .card--vote, .card .cardvote");
+                if (!voteEl) return;
+
+                // Проверяем, не рисовали ли уже KP для этой карточки
+                if (voteEl.querySelector(".drx-kp-badge")) return;
+
+                // Создаем небольшой бейдж KP
+                var badge = document.createElement("span");
+                badge.className = "drx-kp-badge";
+                badge.style.marginLeft = "0.4em";
+                badge.style.fontSize = "0.85em";
+                badge.style.fontWeight = "700";
+                badge.style.color = "#FF9800"; // мягкий оранжевый
+                badge.style.textShadow = "0 0 3px rgba(0,0,0,0.9)";
+
+                // Если нужны иконки, можно добавить префикс 'KP' в отдельный span
+                badge.textContent = "KP " + res.value.toFixed(1);
+
+                voteEl.appendChild(badge);
+              } catch (e) {
+                logError("KP badge render error", e);
+              }
+            });
+          }
+        }
+      } catch (e) {
+        logError("getKpRating integration error", e);
+      }
+      // === КОНЕЦ БЛОКА KP ===
+
+      moveCardAgeToPoster(card);
+
                     drxaosPrefetchTitleLogo(cardData);
                     card.setAttribute('data-quality-processed', 'true');
                 } catch (err) {
