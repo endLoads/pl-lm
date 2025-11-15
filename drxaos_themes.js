@@ -10610,6 +10610,63 @@ function initMovieQualitySystem(jacredUrl) {
         logError("getKpRating integration error", e);
       }
       // === КОНЕЦ БЛОКА KP ===
+      // === БЕЙДЖ ОЗУЧКИ: НОВАЯ СЕРИЯ В ВАШЕЙ ОЗУЧКЕ (beta) ===
+      try {
+        if (window.DrxSuperMenu && DrxSuperMenu.checkVoiceoverUpdate) {
+          // Пытаемся получить ключ контента (используй то, что у тебя реально есть)
+          var vKey =
+            cardData.imdb_id ||
+            cardData.imdbId ||
+            cardData.tmdb_id ||
+            cardData.tmdbId ||
+            cardData.id ||
+            null;
+
+          if (vKey) {
+            // Эти поля нужно будет подстроить под твой источник, если есть данные:
+            var latestSeason  = cardData.latest_season  || cardData.last_season  || undefined;
+            var latestEpisode = cardData.latest_episode || cardData.last_episode || undefined;
+
+            // Если есть инфа об озвучке у последней серии — тоже можно передать
+            var latestVoiceId = cardData.latest_voice_id || cardData.voice_id || undefined;
+
+            var res = DrxSuperMenu.checkVoiceoverUpdate({
+              key: vKey,
+              availableVoiceId: latestVoiceId,
+              latestSeason: Number(latestSeason),
+              latestEpisode: Number(latestEpisode)
+            });
+
+            if (res && res.hasUpdate) {
+              var header = card.querySelector(".card__view, .card__title, .card-title");
+              if (!header) header = card;
+
+              if (!header.querySelector(".drx-voiceover-badge")) {
+                var vBadge = document.createElement("div");
+                vBadge.className = "drx-voiceover-badge";
+                vBadge.style.position = "absolute";
+                vBadge.style.left = "0.6em";
+                vBadge.style.top = "0.6em";
+                vBadge.style.padding = "2px 6px";
+                vBadge.style.borderRadius = "10px";
+                vBadge.style.background = "rgba(33, 150, 243, 0.95)";
+                vBadge.style.color = "#ECEFF4";
+                vBadge.style.fontSize = "0.75em";
+                vBadge.style.fontWeight = "700";
+                vBadge.style.textShadow = "0 0 4px rgba(0,0,0,0.9)";
+                vBadge.style.zIndex = "5";
+                vBadge.textContent = "Новая серия в вашей озвучке";
+
+                header.style.position = header.style.position || "relative";
+                header.appendChild(vBadge);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        logError("voiceover badge render error", e);
+      }
+      // === КОНЕЦ БЛОКА ОЗВУЧКИ ===
 
       moveCardAgeToPoster(card);
 
