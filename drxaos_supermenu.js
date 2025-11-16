@@ -1298,19 +1298,31 @@
       log("Storage listener attach error:", e);
     }
         // Регистрация пункта настроек SuperMenu
-    if (Lampa.Settings && Lampa.Settings.add) {
-        Lampa.Settings.add({
-            title: 'SuperMenu',
-            group: 'plugins',
-            subtitle: 'Расширенное меню и выход',
-            onSelect: function () {
-                // сюда позже можно добавить открытие своего экрана,
-                // если сделаешь отдельный компонент
-                // Lampa.Activity.push({ title: 'SuperMenu', component: 'supermenu', page: 1 });
-            }
-        });
-    }
+if (Lampa.Settings && Lampa.Settings.add) {
+    Lampa.Settings.add({
+        title: 'SuperMenu',
+        group: 'plugins',
+        subtitle: 'Расширенное меню и выход',
+        onSelect: function () {
+            // Открываем раздел "Интерфейс" / "Ещё", где находятся настройки
+            Lampa.Activity.push({
+                url: '',
+                title: 'Настройки',
+                component: 'settings',
+                page: 1
+            });
+            // Программно переходим в нужный раздел (если API позволяет)
+            setTimeout(function() {
+                try {
+                    Lampa.Settings.open('interface'); // или 'more'
+                } catch(e) {
+                    log('Settings.open error:', e);
+                }
+            }, 300);
+        }
+    });
 }
+
 
     // === ТОЧКА ВХОДА SUPERMENU ДЛЯ LAMPA 3.0 ===
     var supermenu_inited = false;
