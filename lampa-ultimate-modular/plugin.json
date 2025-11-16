@@ -1,7 +1,0 @@
-{
-    "name": "Ultimate Modular",
-    "version": "1.0.0",
-    "icon": "icon.png",
-    "description": "Enhanced functionality for LAMPA",
-    "scripts": ["plugin.js"]
-}
