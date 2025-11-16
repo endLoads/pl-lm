@@ -1297,6 +1297,21 @@
     } catch (e) {
       log("Storage listener attach error:", e);
     }
+        // Регистрация пункта настроек SuperMenu
+    if (Lampa.Settings && Lampa.Settings.add) {
+        Lampa.Settings.add({
+            title: 'SuperMenu',
+            group: 'plugins',
+            subtitle: 'Расширенное меню и выход',
+            onSelect: function () {
+                // сюда позже можно добавить открытие своего экрана,
+                // если сделаешь отдельный компонент
+                // Lampa.Activity.push({ title: 'SuperMenu', component: 'supermenu', page: 1 });
+            }
+        });
+    }
+}
+
   }
 
     // === ЗАПУСК ПЛАГИНА ===
@@ -1333,4 +1348,33 @@
       }
     }, 200);
   }
+    // === ТОЧКА ВХОДА SUPERMENU ДЛЯ LAMPA 3.0 ===
+    var supermenu_inited = false;
+
+    function supermenu_start() {
+        if (supermenu_inited) return;
+        supermenu_inited = true;
+        try {
+            init();
+        } catch (e) {
+            console.error('[SuperMenu] init error:', e);
+        }
+    }
+
+    if (typeof Lampa !== 'undefined' && Lampa.Listener && Lampa.Listener.follow) {
+        // Инициализация, когда приложение готово
+        Lampa.Listener.follow('app', function (e) {
+            if (e.type === 'ready') supermenu_start();
+        });
+
+        // На случай, если скрипт подцеплен уже после ready
+        if (window.appready) supermenu_start();
+    } else {
+        // Фолбэк для старых/нестандартных окружений
+        document.addEventListener('DOMContentLoaded', function () {
+            if (typeof Lampa !== 'undefined') supermenu_start();
+        });
+    }
+})();
+
 })();
