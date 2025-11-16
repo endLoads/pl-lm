@@ -6,8 +6,8 @@
 
     // === БАЗОВАЯ КОНФИГУРАЦИЯ ПЛАГИНА ===
     var SuperMenuConfig = {
-      DEBUG: false,
-      VERBOSE_LOGGING: false,
+      DEBUG: true,
+      VERBOSE_LOGGING: true,
 
       // Профиль производительности (базовый)
       PERFORMANCE: {
@@ -925,14 +925,27 @@
       }
     }
 
-    function registerSettings() {
+ function registerSettings() {
   try {
+    log('registerSettings started');
+    
+    // Проверяем готовность API
+    if (!Lampa.SettingsApi || typeof Lampa.SettingsApi.addComponent !== 'function') {
+        log('ERROR: Lampa.SettingsApi.addComponent not available!');
+        return;
+    }
+    
+    log('Adding SuperMenu component...');
+    
     // 1. Создаём отдельный компонент настроек SuperMenu
     Lampa.SettingsApi.addComponent({
       component: 'drxaos_supermenu',
       name: 'SuperMenu',
       icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>'
     });
+    
+    log('SuperMenu component added, adding params...');
+
 
     // 2. Теперь добавляем все параметры в component: 'drxaos_supermenu'
     
@@ -1085,11 +1098,11 @@
       }
     });
 
+      log('registerSettings completed: all 12 params added');
   } catch (e) {
     log('registerSettings error:', e);
   }
 }
-
 
     function applyUserSettings() {
       try {
@@ -1261,12 +1274,27 @@
       log("Export DrxSuperMenu API error:", e);
     }
 
-    // === ЗАПУСК ===
-    registerSettings();
-    applyUserSettings();
-    injectBorderlessDarkTheme();
-    registerTopBarButton();
-    initMadnessSectionHooks();
+ // === ЗАПУСК ===
+// Регистрируем настройки с задержкой, чтобы SettingsApi точно был готов
+setTimeout(function() {
+    try {
+        if (Lampa.SettingsApi && typeof Lampa.SettingsApi.addComponent === 'function') {
+            registerSettings();
+        } else {
+            log('SettingsApi not ready, retrying...');
+            setTimeout(function() {
+                registerSettings();
+            }, 500);
+        }
+    } catch (e) {
+        log('registerSettings error:', e);
+    }
+}, 100);
+
+applyUserSettings();
+injectBorderlessDarkTheme();
+registerTopBarButton();
+initMadnessSectionHooks();
 
     try {
       if (
