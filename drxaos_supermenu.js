@@ -1312,19 +1312,6 @@
     }
 }
 
-  }
-
-  // Ждём появления Lampa, если плагин подцепился слишком рано
-  if (typeof Lampa !== "undefined") {
-    bootstrapSuperMenu();
-  } else {
-    var superMenuTimer = setInterval(function () {
-      if (typeof Lampa !== "undefined") {
-        clearInterval(superMenuTimer);
-        bootstrapSuperMenu();
-      }
-    }, 200);
-  }
     // === ТОЧКА ВХОДА SUPERMENU ДЛЯ LAMPA 3.0 ===
     var supermenu_inited = false;
 
