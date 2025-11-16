@@ -1260,6 +1260,124 @@
       }
     }
 
+// === КОМПОНЕНТ НАСТРОЕК SUPERMENU (УПРОЩЁННЫЙ) ===
+
+function SuperMenuSettingsComponent(object) {
+  var scroll = new Lampa.Scroll({ mask: true, over: true });
+  var html = $('<div></div>');
+  var items = [];
+  var active = 0;
+
+  var settings = [
+    { key: 'drxaos_supermenu_madness', title: 'MADNESS режим', description: 'Визуальные эффекты', default: false },
+    { key: 'drxaos_supermenu_label_colors', title: 'Цветные метки качества', description: 'Раскраска текста качества', default: true },
+    { key: 'drxaos_supermenu_topbar_exit', title: 'Меню выхода', description: 'Кнопка меню выхода в панели', default: true },
+    { key: 'drxaos_supermenu_borderless_dark', title: 'Тёмная тема', description: 'Карточки без рамок', default: false },
+    { key: 'drxaos_supermenu_ratings_tmdb', title: 'Рейтинг TMDB', description: 'Отображать TMDB', default: true },
+    { key: 'drxaos_supermenu_ratings_imdb', title: 'Рейтинг IMDb', description: 'Отображать IMDb', default: false },
+    { key: 'drxaos_supermenu_ratings_kp', title: 'Рейтинг КиноПоиск', description: 'Отображать КП', default: false }
+  ];
+
+  this.create = function () {
+    var self = this;
+    
+    html.append('<div style="padding:2em"><h2>Настройки SuperMenu</h2></div>');
+    html.append(scroll.render());
+
+    settings.forEach(function(setting) {
+      var currentValue = Lampa.Storage.get(setting.key, setting.default ? 'true' : 'false') === 'true';
+      
+      var item = $('<div class="selector" style="padding:1em;margin:0.5em;background:rgba(255,255,255,0.1);border-radius:0.5em">' +
+        '<div style="font-size:1.3em;font-weight:bold">' + setting.title + '</div>' +
+        '<div style="opacity:0.7">' + setting.description + '</div>' +
+        '<div style="color:#4CAF50;margin-top:0.5em">' + (currentValue ? '✓ Вкл' : '✗ Выкл') + '</div>' +
+        '</div>');
+
+      item.on('hover:enter', function () {
+        var newValue = !(Lampa.Storage.get(setting.key, setting.default ? 'true' : 'false') === 'true');
+        Lampa.Storage.set(setting.key, newValue ? 'true' : 'false');
+        
+        item.find('div').last().text(newValue ? '✓ Вкл' : '✗ Выкл');
+        
+        if (typeof Lampa.Noty !== 'undefined') {
+          Lampa.Noty.show(setting.title + ': ' + (newValue ? 'Включено' : 'Выключено'));
+        }
+      });
+
+      item.on('hover:focus', function () {
+        scroll.update(item, true);
+      });
+
+      scroll.append(item);
+      items.push(item);
+    });
+
+    var backBtn = $('<div class="selector" style="padding:1em;margin:1em;background:rgba(255,100,100,0.3);border-radius:0.5em;text-align:center">← Назад</div>');
+    backBtn.on('hover:enter', function() {
+      self.back();
+    });
+    scroll.append(backBtn);
+    items.push(backBtn);
+
+    return this.render();
+  };
+
+  this.start = function () {
+    var self = this;
+    
+    Lampa.Controller.add('supermenu_settings', {
+      toggle: function () {
+        Lampa.Controller.collectionSet(scroll.render());
+        if (items.length > 0) {
+          Lampa.Controller.collectionFocus(items[0][0], scroll.render());
+        }
+      },
+      back: function() {
+        self.back();
+      }
+    });
+    
+    Lampa.Controller.toggle('supermenu_settings');
+  };
+
+  this.back = function () {
+    Lampa.Activity.backward();
+  };
+
+  this.render = function () {
+    return html;
+  };
+
+  this.destroy = function () {
+    Lampa.Arrays.destroy(items);
+    scroll.destroy();
+    html.remove();
+  };
+}
+
+// Регистрация компонента
+if (typeof Lampa !== 'undefined' && Lampa.Component) {
+  Lampa.Component.add('supermenu_settings', SuperMenuSettingsComponent);
+}
+
+// Добавляем пункт в настройки
+if (typeof Lampa !== 'undefined' && Lampa.Settings && Lampa.Settings.add) {
+  Lampa.Settings.add({
+    title: 'SuperMenu',
+    group: 'plugins',
+    subtitle: 'Расширенное меню и выход',
+    onSelect: function () {
+      Lampa.Activity.push({
+        url: '',
+        title: 'SuperMenu',
+        component: 'supermenu_settings',
+        page: 1
+      });
+    }
+  });
+}
+
+
     // === ЭКСПОРТ ВНЕШНЕГО API ===
 
     try {
