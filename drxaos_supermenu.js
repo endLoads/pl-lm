@@ -1314,29 +1314,6 @@
 
   }
 
-    // === ЗАПУСК ПЛАГИНА ===
-  function bootstrapSuperMenu() {
-    try {
-      if (typeof Lampa === "undefined") return;
-
-      if (window.appready) {
-        // Приложение уже готово — просто запускаем init()
-        init();
-      } else if (Lampa.Listener && typeof Lampa.Listener.follow === "function") {
-        // Ждём события ready от приложения
-        Lampa.Listener.follow("app", function (e) {
-          try {
-            if (e.type === "ready") init();
-          } catch (err) {
-            log("SuperMenu init on app:ready error:", err);
-          }
-        });
-      }
-    } catch (e) {
-      log("bootstrapSuperMenu error:", e);
-    }
-  }
-
   // Ждём появления Lampa, если плагин подцепился слишком рано
   if (typeof Lampa !== "undefined") {
     bootstrapSuperMenu();
@@ -1375,6 +1352,4 @@
             if (typeof Lampa !== 'undefined') supermenu_start();
         });
     }
-})();
-
 })();
