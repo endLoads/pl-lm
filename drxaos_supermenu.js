@@ -1261,184 +1261,150 @@
     }
 
 
-      // === КОМПОНЕНТ НАСТРОЕК SUPERMENU ===
-function SuperMenuSettingsComponent() {
-  var html = $('<div></div>');
-  var scroll = new Lampa.Scroll({mask: true, over: true, step: 250});
-  var items = [];
+// === КОМПОНЕНТ НАСТРОЕК SUPERMENU (ES5-СОВМЕСТИМЫЙ) ===
 
-  html.append(scroll.render());
-
-  var settings = [
-    { key: 'drxaos_supermenu_madness', title: 'MADNESS режим', description: 'Визуальные эффекты и расширенные украшения интерфейса', default: false },
-    { key: 'drxaos_supermenu_label_colors', title: 'Цветные метки качества', description: 'Раскраска текста качества и типа (фильм/сериал)', default: true },
-    { key: 'drxaos_supermenu_topbar_exit', title: 'Меню выхода в верхней панели', description: 'Добавить кнопку меню выхода рядом с консолью', default: true },
-    { key: 'drxaos_supermenu_borderless_dark', title: 'Тёмная тема без рамок', description: 'Сглаженные карточки без рамок, тёмный фон', default: false },
-    { key: 'drxaos_supermenu_ratings_tmdb', title: 'Рейтинг TMDB', description: 'Отображать рейтинг TMDB на карточках', default: true },
-    { key: 'drxaos_supermenu_ratings_imdb', title: 'Рейтинг IMDb', description: 'Отображать рейтинг IMDb на карточках', default: false },
-    { key: 'drxaos_supermenu_ratings_kp', title: 'Рейтинг КиноПоиск', description: 'Отображать рейтинг КиноПоиск (требуется внешнее API)', default: false },
-    { key: 'drxaos_supermenu_voiceover_tracking', title: 'Отслеживание озвучек (beta)', description: 'Запоминать выбранную озвучку и подсвечивать новые серии', default: false }
-  ];
-
-  this.create = function() {
+function SuperMenuSettingsComponent(object) {
     var _this = this;
-    this.activity.loader(true);
+    var scroll = new Lampa.Scroll({ mask: true, over: true });
+    var html = $('<div></div>'); // Пустой контейнер
+    var body = $('<div class="settings-component"></div>');
+    var items = [];
+    var active = 0;
 
-    // Заголовок (как в ui.md)
-    var title = $('<div class="selector">' +
-      '<div class="supermenu-settings__title">Настройки SuperMenu</div>' +
-      '<div class="supermenu-settings__subtitle">Настройка функций и внешнего вида плагина</div>' +
-    '</div>');
-    scroll.append(title);
-    items.push(title);
+    // Описание настроек
+    var settings_list = [
+        { key: 'drxaos_supermenu_madness', title: 'MADNESS режим', description: 'Визуальные эффекты и расширенные украшения интерфейса', default: false },
+        { key: 'drxaos_supermenu_label_colors', title: 'Цветные метки качества', description: 'Раскраска текста качества и типа (фильм/сериал)', default: true },
+        { key: 'drxaos_supermenu_topbar_exit', title: 'Меню выхода в верхней панели', description: 'Добавить кнопку меню выхода рядом с консолью', default: true },
+        { key: 'drxaos_supermenu_borderless_dark', title: 'Тёмная тема без рамок', description: 'Сглаженные карточки без рамок, тёмный фон', default: false },
+        { key: 'drxaos_supermenu_ratings_tmdb', title: 'Рейтинг TMDB', description: 'Отображать рейтинг TMDB на карточках', default: true },
+        { key: 'drxaos_supermenu_ratings_imdb', title: 'Рейтинг IMDb', description: 'Отображать рейтинг IMDb на карточках', default: false },
+        { key: 'drxaos_supermenu_ratings_kp', title: 'Рейтинг КиноПоиск', description: 'Отображать рейтинг КиноПоиск (требуется внешнее API)', default: false },
+        { key: 'drxaos_supermenu_voiceover_tracking', title: 'Отслеживание озвучек (beta)', description: 'Запоминать выбранную озвучку и подсвечивать новые серии', default: false }
+    ];
 
-    // Настройки как селекторы (по примеру ui.md)
-    settings.forEach(function(setting) {
-      var current = Lampa.Storage.get(setting.key, setting.default ? 'true' : 'false') === 'true';
-      var item = $('<div class="selector supermenu-settings__item">' +
-        '<div class="supermenu-settings__item-title">' + setting.title + '</div>' +
-        '<div class="supermenu-settings__item-description">' + setting.description + '</div>' +
-        '<div class="supermenu-settings__item-toggle">' + (current ? '✓ Вкл' : '✗ Выкл') + '</div>' +
-      '</div>');
-
-      if (current) {
-        item.addClass('supermenu-settings__item--active');
-      }
-
-      item.on('hover:enter', function() {
-        var newValue = !current;
-        Lampa.Storage.set(setting.key, newValue ? 'true' : 'false');
+    // Функция отрисовки одного элемента
+    function buildItem(setting) {
+        var currentValue = Lampa.Storage.get(setting.key, setting.default ? 'true' : 'false') === 'true';
         
-        current = newValue;
-        item.toggleClass('supermenu-settings__item--active', newValue);
-        item.find('.supermenu-settings__item-toggle').text(newValue ? '✓ Вкл' : '✗ Выкл');
-        
-        Lampa.Noty.show(setting.title + ': ' + (newValue ? 'Включено' : 'Выключено'));
-        
-        // Применяем на лету (по api.md)
-        if (typeof applyUserSettings === 'function') {
-          try {
-            applyUserSettings();
-          } catch(e) {
-            console.error('[SuperMenu] applyUserSettings error:', e);
-          }
-        }
-      });
+        var item = $('<div class="selector settings-component__item">' +
+            '<div class="settings-component__item-title">' + setting.title + '</div>' +
+            '<div class="settings-component__item-description">' + setting.description + '</div>' +
+            '<div class="settings-component__item-toggle">' + (currentValue ? '✓ Вкл' : '✗ Выкл') + '</div>' +
+            '</div>');
 
-      item.on('hover:focus', function(e) {
-        scroll.update($(e.target), true);
-      });
+        if (currentValue) item.addClass('settings-component__item--active');
 
-      scroll.append(item);
-      items.push(item);
-    });
+        item.on('hover:enter', function () {
+            var newValue = !(Lampa.Storage.get(setting.key, setting.default ? 'true' : 'false') === 'true');
+            Lampa.Storage.set(setting.key, newValue ? 'true' : 'false');
+            
+            item.toggleClass('settings-component__item--active', newValue);
+            item.find('.settings-component__item-toggle').text(newValue ? '✓ Вкл' : '✗ Выкл');
+            
+            if (Lampa.Noty) Lampa.Noty.show(setting.title + ': ' + (newValue ? 'Включено' : 'Выключено'));
+            
+            try {
+                if (typeof applyUserSettings === 'function') applyUserSettings();
+            } catch(e) {
+                if (SuperMenuConfig.DEBUG) log('applyUserSettings error:', e);
+            }
+        });
 
-    // Кнопка назад (как в примерах ui.md)
-    var back = $('<div class="selector supermenu-settings__back">← Назад</div>');
-    back.on('hover:enter', function() {
-      _this.back();
-    });
-    back.on('hover:focus', function(e) {
-      scroll.update($(e.target), true);
-    });
-    scroll.append(back);
-    items.push(back);
-
-    // Стили (вставка в head, как в ui.md)
-    if ($('head').find('#supermenu-styles').length === 0) {
-      $('<style id="supermenu-styles">' +
-        '.supermenu-settings__title { font-size: 2em; font-weight: bold; margin: 1em 0 0.5em; }' +
-        '.supermenu-settings__subtitle { font-size: 1.2em; opacity: 0.7; margin-bottom: 1em; }' +
-        '.supermenu-settings__item { padding: 1.5em; margin: 0.5em 0; border-radius: 0.5em; background: rgba(255,255,255,0.1); transition: all 0.3s; }' +
-        '.supermenu-settings__item.focus { background: rgba(255,255,255,0.2); }' +
-        '.supermenu-settings__item--active { border-left: 4px solid #4CAF50; }' +
-        '.supermenu-settings__item-title { font-size: 1.4em; font-weight: bold; margin-bottom: 0.5em; }' +
-        '.supermenu-settings__item-description { font-size: 1em; opacity: 0.8; }' +
-        '.supermenu-settings__item-toggle { font-size: 1.2em; font-weight: bold; color: #4CAF50; }' +
-        '.supermenu-settings__back { padding: 1em; margin-top: 2em; background: rgba(255,100,100,0.3); border-radius: 0.5em; text-align: center; font-size: 1.3em; }' +
-        '.supermenu-settings__back.focus { background: rgba(255,100,100,0.5); }' +
-      '</style>').appendTo('head');
+        return item;
     }
 
-    this.activity.loader(false);
-    this.activity.toggle();
-  };
+    this.create = function () {
+        this.activity.loader(true);
 
-  this.start = function() {
-    var _this = this;
+        // Заголовок
+        var header = $('<div class="settings-component__header">' +
+            '<div class="settings-component__title">Настройки SuperMenu</div>' +
+            '<div class="settings-component__subtitle">Настройка функций и внешнего вида плагина</div>' +
+            '</div>');
+        body.append(header);
 
-    Lampa.Controller.add('supermenu_settings', {
-      toggle: function hide() {
-        Lampa.Controller.collectionSet(scroll.render(), scroll.render());
-        if (items.length && items[0]) {
-          Lampa.Controller.collectionFocus(items[0][0], scroll.render());
+        // Элементы
+        settings_list.forEach(function(setting) {
+            var item = buildItem(setting);
+            items.push(item);
+            scroll.append(item);
+        });
+
+        // Стили - БЕЗОПАСНЫЙ СПОСОБ
+        var styles = '';
+        styles += '.settings-component { padding: 2em; }';
+        styles += '.settings-component__header { margin-bottom: 2em; }';
+        styles += '.settings-component__title { font-size: 2em; font-weight: bold; margin-bottom: 0.5em; }';
+        styles += '.settings-component__subtitle { font-size: 1.2em; opacity: 0.7; }';
+        styles += '.settings-component__item { background: rgba(255,255,255,0.1); padding: 1.5em; margin-bottom: 1em; border-radius: 0.5em; transition: all 0.3s; }';
+        styles += '.settings-component__item.focus { background: rgba(255,255,255,0.2); transform: scale(1.02); }';
+        styles += '.settings-component__item--active { border-left: 4px solid #4CAF50; }';
+        styles += '.settings-component__item-title { font-size: 1.4em; font-weight: bold; margin-bottom: 0.5em; }';
+        styles += '.settings-component__item-description { font-size: 1em; opacity: 0.8; margin-bottom: 0.5em; }';
+        styles += '.settings-component__item-toggle { font-size: 1.2em; font-weight: bold; color: #4CAF50; }';
+        
+        // Добавляем стили в head, если их ещё нет
+        if ($('#supermenu-settings-style').length === 0) {
+            $('head').append('<style id="supermenu-settings-style">' + styles + '</style>');
         }
-      },
-      back: function hide() {
+
+        html.append(scroll.render());
+        this.activity.loader(false);
+        this.activity.toggle();
+        return this.render();
+    };
+
+    this.start = function () {
+        Lampa.Controller.add('supermenu_settings', {
+            toggle: function () {
+                Lampa.Controller.collectionSet(scroll.render());
+                Lampa.Controller.collectionFocus(items.length ? items[0] : false, scroll.render());
+            },
+            back: function() {
+                _this.back();
+            }
+        });
+        Lampa.Controller.toggle('supermenu_settings');
+    };
+
+    this.back = function () {
         Lampa.Activity.backward();
-      },
-      up: function() {
-        if (Navigator.canmove('up')) {
-          Navigator.move('up');
-        } else {
-          Lampa.Controller.toggle('menu');
+    };
+
+    this.render = function () {
+        return html;
+    };
+
+    this.destroy = function () {
+        $('#supermenu-settings-style').remove();
+        Lampa.Arrays.destroy(items);
+        scroll.destroy();
+        html.remove();
+        items = null;
+    };
+}
+
+// Регистрируем компонент
+if (typeof Lampa.Component !== 'undefined') {
+    Lampa.Component.add('supermenu_settings', SuperMenuSettingsComponent);
+}
+
+// Добавляем пункт в настройки
+if (typeof Lampa.Settings !== 'undefined') {
+    Lampa.Settings.add({
+        title: 'SuperMenu',
+        group: 'plugins',
+        subtitle: 'Расширенное меню и выход',
+        onSelect: function () {
+            Lampa.Activity.push({
+                title: 'SuperMenu',
+                component: 'supermenu_settings'
+            });
         }
-      },
-      down: function() {
-        Navigator.move('down');
-      },
-      right: function() {
-        Navigator.move('right');
-      },
-      left: function() {
-        if (Navigator.canmove('left')) {
-          Navigator.move('left');
-        } else {
-          Lampa.Controller.toggle('menu');
-        }
-      }
     });
-
-    Lampa.Controller.toggle('supermenu_settings');
-  };
-
-  this.back = function() {
-    Lampa.Activity.backward();
-  };
-
-  this.render = function() {
-    return html;
-  };
-
-  this.destroy = function() {
-    Lampa.Arrays.destroy(items);
-    scroll.destroy();
-    html.remove();
-    $('#supermenu-styles').remove();
-  };
 }
 
-// Регистрация (по api.md)
-if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Component.add) {
-  Lampa.Component.add('supermenu_settings', SuperMenuSettingsComponent);
-}
-
-// Пункт в настройках (по ui.md)
-if (Lampa.Settings && Lampa.Settings.add) {
-  Lampa.Settings.add({
-    title: 'SuperMenu',
-    group: 'plugins',
-    subtitle: 'Расширенное меню и выход',
-    onSelect: function() {
-      Lampa.Activity.push({
-        url: '',
-        title: 'Настройки SuperMenu',
-        component: 'supermenu_settings',
-        page: 1
-      });
-    }
-  });
-}
 
 
 
