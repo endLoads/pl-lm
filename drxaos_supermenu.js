@@ -1,13 +1,329 @@
 (function () {
   "use strict";
 
+  // ============================================================================
+  // ЛОГИРОВАНИЕ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+  // ============================================================================
+
+  function log() {
+    try {
+      console.log.apply(console, ["[SuperMenu]"].concat(Array.prototype.slice.call(arguments)));
+    } catch (e) {}
+  }
+
+  function logError(msg, err) {
+    try {
+      console.error("[SuperMenu] " + msg, err || "");
+    } catch (e) {}
+  }
+
+  // Throttle и debounce функции
+  function throttle(func, limit) {
+    var inThrottle;
+    return function() {
+      var args = arguments;
+      var context = this;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(function() { inThrottle = false; }, limit);
+      }
+    };
+  }
+
+  function debounce(func, delay) {
+    var timeout;
+    return function() {
+      var context = this;
+      var args = arguments;
+      clearTimeout(timeout);
+      timeout = setTimeout(function() {
+        func.apply(context, args);
+      }, delay);
+    };
+  }
+
+  // ============================================================================
+  // ГЛАВНАЯ КОНФИГУРАЦИЯ
+  // ============================================================================
+
+var SuperMenuConfig = {
+      DEBUG: false,
+      VERBOSE_LOGGING: false,
+
+      // Профиль производительности (базовый)
+      PERFORMANCE: {
+        DEBOUNCE_DELAY: 300,
+        THROTTLE_LIMIT: 100,
+        MUTATION_THROTTLE: 50
+      },
+
+      // Поведение в разных средах
+      PLATFORM: {
+        isAndroid: Lampa.Platform.is("android"),
+        isWebOS: Lampa.Platform.is("webos"),
+        isTizen: Lampa.Platform.is("tizen"),
+        isBrowser: Lampa.Platform.is("browser"),
+        isTV:
+          Lampa.Platform.is("android") ||
+          Lampa.Platform.is("tizen") ||
+          Lampa.Platform.is("webos") ||
+          Lampa.Platform.is("orsay") ||
+          Lampa.Platform.is("netcast")
+      },
+
+      // Цветовые схемы для меток качества и типа
+      LABEL_COLORS: {
+        vivid: {
+          TYPE: {
+            movie: "#FFD54F",
+            tv: "#4CAF50",
+            anime: "#E91E63"
+          },
+          QUALITY: {
+            "4K": "#FF5722",
+            "2160p": "#FF5722",
+            "1080p": "#03A9F4",
+            "720p": "#B0BEC5",
+            SD: "#90A4AE",
+            CAM: "#FF7043",
+            HDR: "#FFC107"
+          }
+        },
+        soft: {
+          TYPE: {
+            movie: "#FFE082",
+            tv: "#A5D6A7",
+            anime: "#F48FB1"
+          },
+          QUALITY: {
+            "4K": "#FFAB91",
+            "2160p": "#FFAB91",
+            "1080p": "#81D4FA",
+            "720p": "#CFD8DC",
+            SD: "#B0BEC5",
+            CAM: "#FFAB91",
+            HDR: "#FFD54F"
+          }
+        }
+      },
+
+      LABEL_SCHEME: "vivid",
+
+      // Параметры рейтингов и API
+      RATINGS: {
+        tmdbApiKey: "",
+        kpApiKey: "",
+        kpApiUrl: "https://kinopoiskapiunofficial.tech/api/v2.2/films"
+      },
+
+      // Кэш рейтингов на время сессии
+      RATING_CACHE: {
+        tmdb: Object.create(null),
+        imdb: Object.create(null),
+        kp: Object.create(null)
+      },
+
+      VOICEOVER: {
+        enabled: false,
+        cache: Object.create(null)
+      },
+
+      // Включение/выключение подсистем
+      FEATURES: {
+        madness: true,
+        madness_level: "normal", // off | normal | full
+
+        ratings_tmdb: true,
+        ratings_imdb: true,
+        ratings_kp: true,
+        ratings_other: false,
+
+        label_colors: true,
+        voiceover_tracking: false,
+        topbar_exit_menu: true,
+
+        borderless_dark_theme: false
+      }
+    };
+
+  // ============================================================================
+  // РЕГИСТРАЦИЯ НАСТРОЕК (по паттерну drxaos_themes)
+  // ============================================================================
+
+  function addSettings() {
+    try {
+      // 1. Проверяем готовность API
+      if (!window.Lampa || !Lampa.Storage || !Lampa.SettingsApi || typeof Lampa.SettingsApi.addComponent !== 'function') {
+        logError('Lampa.SettingsApi not ready or addComponent method missing');
+        return;
+      }
+
+      // 2. Проверяем, не добавлены ли уже настройки
+      if (Lampa.SettingsApi.__superMenuSettingsAdded) {
+        log('Settings already added, skipping');
+        return;
+      }
+
+      // 3. Инициализация значений по умолчанию
+      var defaults = {
+        'supermenu_madness': 'false',
+        'supermenu_madness_level': 'normal',
+        'supermenu_perf_mode': Lampa.Platform && Lampa.Platform.is('android') ? 'android_perf' : 'normal',
+        'supermenu_ratings_tmdb': 'true',
+        'supermenu_ratings_imdb': 'true',
+        'supermenu_ratings_kp': 'false',
+        'supermenu_label_colors': 'true',
+        'supermenu_label_scheme': 'vivid',
+        'supermenu_topbar_exit': 'true',
+        'supermenu_borderless_dark': 'false',
+        'supermenu_voiceover_tracking': 'false'
+      };
+
+      Object.keys(defaults).forEach(function(key) {
+        if (!Lampa.Storage.get(key)) {
+          Lampa.Storage.set(key, defaults[key]);
+        }
+      });
+
+      log('Creating SuperMenu settings component...');
+
+      // 4. Создаём компонент настроек
+      try {
+        Lampa.SettingsApi.addComponent({
+          component: 'supermenu',
+          name: 'SuperMenu',
+          icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>'
+        });
+        log('Component created successfully');
+      } catch (e) {
+        logError('Error creating component', e);
+        return;
+      }
+
+      var paramsAdded = 0;
+      var paramsFailed = 0;
+
+      // 5. Добавляем параметры по одному
+
+      var params = [
+        {
+          name: 'supermenu_madness',
+          type: 'trigger',
+          default: false,
+          field: { name: 'MADNESS режим', description: 'Визуальные эффекты и расширенные украшения интерфейса' }
+        },
+        {
+          name: 'supermenu_madness_level',
+          type: 'select',
+          values: { off: 'Выключен', normal: 'Стандартный', full: 'Полный' },
+          default: 'normal',
+          field: { name: 'Уровень MADNESS', description: 'Насколько агрессивно модифицировать интерфейс' }
+        },
+        {
+          name: 'supermenu_perf_mode',
+          type: 'select',
+          values: { normal: 'Обычный режим', android_perf: 'Щадящий режим (Android TV)' },
+          default: Lampa.Platform && Lampa.Platform.is('android') ? 'android_perf' : 'normal',
+          field: { name: 'Производительность плагина', description: 'Настройка отзывчивости интерфейса и нагрузки на устройство' }
+        },
+        {
+          name: 'supermenu_ratings_tmdb',
+          type: 'trigger',
+          default: true,
+          field: { name: 'Рейтинг TMDB', description: 'Отображать рейтинг TMDB на карточках' }
+        },
+        {
+          name: 'supermenu_ratings_imdb',
+          type: 'trigger',
+          default: true,
+          field: { name: 'Рейтинг IMDb', description: 'Отображать рейтинг IMDb на карточках' }
+        },
+        {
+          name: 'supermenu_ratings_kp',
+          type: 'trigger',
+          default: false,
+          field: { name: 'Рейтинг КиноПоиск', description: 'Отображать рейтинг КиноПоиск (требуется внешнее API)' }
+        },
+        {
+          name: 'supermenu_label_colors',
+          type: 'trigger',
+          default: true,
+          field: { name: 'Цветные метки качества и типа', description: 'Раскраска текста качества и типа' }
+        },
+        {
+          name: 'supermenu_label_scheme',
+          type: 'select',
+          values: { vivid: 'Яркая схема', soft: 'Мягкая схема' },
+          default: 'vivid',
+          field: { name: 'Цветовая схема меток', description: 'Выбор палитры для меток' }
+        },
+        {
+          name: 'supermenu_topbar_exit',
+          type: 'trigger',
+          default: true,
+          field: { name: 'Меню выхода в верхней панели', description: 'Добавить кнопку меню выхода' }
+        },
+        {
+          name: 'supermenu_borderless_dark',
+          type: 'trigger',
+          default: false,
+          field: { name: 'Тема: тёмная без рамок', description: 'Сглаженные карточки без рамок' }
+        },
+        {
+          name: 'supermenu_voiceover_tracking',
+          type: 'trigger',
+          default: false,
+          field: { name: 'Отслеживание озвучек (beta)', description: 'Запоминать выбранную озвучку' }
+        }
+      ];
+
+      params.forEach(function(paramConfig) {
+        try {
+          Lampa.SettingsApi.addParam({
+            component: 'supermenu',
+            param: {
+              name: paramConfig.name,
+              type: paramConfig.type,
+              values: paramConfig.values || undefined,
+              default: paramConfig.default
+            },
+            field: paramConfig.field
+          });
+          paramsAdded++;
+        } catch (e) {
+          logError('Error adding param: ' + paramConfig.name, e);
+          paramsFailed++;
+        }
+      });
+
+      // 6. Устанавливаем флаг
+      if (paramsAdded > 0) {
+        Lampa.SettingsApi.__superMenuSettingsAdded = true;
+        log('SuperMenu settings added: ' + paramsAdded + ' parameters, ' + paramsFailed + ' failed');
+      } else {
+        logError('Failed to add any parameters. Total failed: ' + paramsFailed);
+      }
+
+    } catch (err) {
+      logError('addSettings global error', err);
+    }
+  }
+
+  // ============================================================================
+  // ВСЁ ОСТАЛЬНОЕ ИЗ ОРИГИНАЛЬНОГО ФАЙЛА (ФУНКЦИОНАЛ ПЛАГИНА)
+  // ============================================================================
+
+(function () {
+  "use strict";
+
   function init() {
     if (typeof Lampa === "undefined") return;
 
     // === БАЗОВАЯ КОНФИГУРАЦИЯ ПЛАГИНА ===
     var SuperMenuConfig = {
-      DEBUG: true,
-      VERBOSE_LOGGING: true,
+      DEBUG: false,
+      VERBOSE_LOGGING: false,
 
       // Профиль производительности (базовый)
       PERFORMANCE: {
@@ -925,524 +1241,59 @@
       }
     }
 
-     // === НАСТРОЙКИ SUPERMENU (по аналогии с drxaos_theme) ===
-    function registerSettings() {
-      try {
-        // 1. Проверяем готовность API
-        if (!window.Lampa || !Lampa.Storage || !Lampa.SettingsApi || typeof Lampa.SettingsApi.addComponent !== 'function') {
-          log('Lampa.SettingsApi not ready or addComponent missing');
-          return;
-        }
-
-        // 2. Проверяем, не добавлены ли уже настройки
-        if (Lampa.SettingsApi.__superMenuSettingsAdded) {
-          log('SuperMenu settings already added, skip');
-          return;
-        }
-
-        // 3. Базовые значения по умолчанию
-        var defaults = {
-          'drxaos_supermenu_madness': SuperMenuConfig.FEATURES.madness ? 'true' : 'false',
-          'drxaos_supermenu_madness_level': SuperMenuConfig.FEATURES.madness_level || 'normal',
-          'drxaos_supermenu_perf_mode': SuperMenuConfig.PLATFORM.isAndroid ? 'android_perf' : 'normal'
-        };
-
-        for (var key in defaults) {
-          if (!Lampa.Storage.get(key)) {
-            Lampa.Storage.set(key, defaults[key]);
-          }
-        }
-
-        log('Creating SuperMenu settings component...');
-
-        // 4. Создаём компонент настроек (как drxaos_themes.addComponent)
-        try {
-          Lampa.SettingsApi.addComponent({
-            component: 'supermenu',
-            name: 'SuperMenu',
-            icon: '<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z\" fill=\"currentColor\"/><circle cx=\"12\" cy=\"12\" r=\"3\" fill=\"currentColor\"/></svg>'
-          });
-          log('SuperMenu component created');
-        } catch (e) {
-          log('Error creating SuperMenu component:', e);
-          return;
-        }
-
-        var paramsAdded = 0;
-        var paramsFailed = 0;
-
-        // 5. Добавляем параметры по одному с try/catch, компонент = 'supermenu'
-
-        // MADNESS режим
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_madness',
-              type: 'trigger',
-              default: SuperMenuConfig.FEATURES.madness
-            },
-            field: {
-              name: 'MADNESS режим',
-              description: 'Визуальные эффекты и расширенные украшения интерфейса'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding madness param:', e);
-          paramsFailed++;
-        }
-
-        // Уровень MADNESS
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_madness_level',
-              type: 'select',
-              values: {
-                off: 'Выключен',
-                normal: 'Стандартный',
-                full: 'Полный'
-              },
-              default: SuperMenuConfig.FEATURES.madness_level
-            },
-            field: {
-              name: 'Уровень MADNESS',
-              description: 'Насколько агрессивно модифицировать интерфейс'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding madness_level param:', e);
-          paramsFailed++;
-        }
-
-        // Производительность
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_perf_mode',
-              type: 'select',
-              values: {
-                normal: 'Обычный режим',
-                android_perf: 'Щадящий режим (Android TV)'
-              },
-              default: SuperMenuConfig.PLATFORM.isAndroid ? 'android_perf' : 'normal'
-            },
-            field: {
-              name: 'Производительность плагина',
-              description: 'Настройка отзывчивости интерфейса и нагрузки на устройство'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding perf_mode param:', e);
-          paramsFailed++;
-        }
-
-        // Рейтинги TMDB
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_ratings_tmdb',
-              type: 'trigger',
-              default: SuperMenuConfig.FEATURES.ratings_tmdb
-            },
-            field: {
-              name: 'Рейтинг TMDB',
-              description: 'Отображать рейтинг TMDB на карточках'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding ratings_tmdb param:', e);
-          paramsFailed++;
-        }
-
-        // Рейтинги IMDb
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_ratings_imdb',
-              type: 'trigger',
-              default: SuperMenuConfig.FEATURES.ratings_imdb
-            },
-            field: {
-              name: 'Рейтинг IMDb',
-              description: 'Отображать рейтинг IMDb на карточках'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding ratings_imdb param:', e);
-          paramsFailed++;
-        }
-
-        // Рейтинги КиноПоиск
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_ratings_kp',
-              type: 'trigger',
-              default: SuperMenuConfig.FEATURES.ratings_kp
-            },
-            field: {
-              name: 'Рейтинг КиноПоиск',
-              description: 'Отображать рейтинг КиноПоиск (требуется внешнее API)'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding ratings_kp param:', e);
-          paramsFailed++;
-        }
-
-        // Цветные метки качества/типа
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_label_colors',
-              type: 'trigger',
-              default: SuperMenuConfig.FEATURES.label_colors
-            },
-            field: {
-              name: 'Цветные метки качества и типа',
-              description: 'Раскраска текста качества и типа (фильм/сериал)'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding label_colors param:', e);
-          paramsFailed++;
-        }
-
-        // Схема цветов
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_label_scheme',
-              type: 'select',
-              values: {
-                vivid: 'Яркая схема',
-                soft: 'Мягкая схема'
-              },
-              default: SuperMenuConfig.LABEL_SCHEME
-            },
-            field: {
-              name: 'Цветовая схема меток',
-              description: 'Выбор палитры для меток качества и типа'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding label_scheme param:', e);
-          paramsFailed++;
-        }
-
-        // Меню выхода
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_topbar_exit',
-              type: 'trigger',
-              default: SuperMenuConfig.FEATURES.topbar_exit_menu
-            },
-            field: {
-              name: 'Меню выхода в верхней панели',
-              description: 'Добавить кнопку меню выхода рядом с консолью и перезагрузкой'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding topbar_exit param:', e);
-          paramsFailed++;
-        }
-
-        // Тёмная тема без рамок
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_borderless_dark',
-              type: 'trigger',
-              default: SuperMenuConfig.FEATURES.borderless_dark_theme
-            },
-            field: {
-              name: 'Тема: тёмная без рамок',
-              description: 'Сглаженные карточки без рамок, тёмный фон, повышенная читаемость'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding borderless_dark param:', e);
-          paramsFailed++;
-        }
-
-        // Трекинг озвучек
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: {
-              name: 'drxaos_supermenu_voiceover_tracking',
-              type: 'trigger',
-              default: SuperMenuConfig.FEATURES.voiceover_tracking
-            },
-            field: {
-              name: 'Отслеживание озвучек (beta)',
-              description: 'Запоминать выбранную озвучку и подсвечивать новые серии в этой озвучке (если источник даёт данные)'
-            }
-          });
-          paramsAdded++;
-        } catch (e) {
-          log('Error adding voiceover_tracking param:', e);
-          paramsFailed++;
-        }
-
-        // 6. Флаг «добавлено» как в themes
-        if (paramsAdded > 0) {
-          Lampa.SettingsApi.__superMenuSettingsAdded = true;
-          log('SuperMenu settings added: ' + paramsAdded + ' ok, ' + paramsFailed + ' failed');
-        } else {
-          log('Failed to add any SuperMenu params, failed: ' + paramsFailed);
-        }
-
-      } catch (err) {
-        log('registerSettings global error:', err);
-      }
-    }
+    
 
 
-    function applyUserSettings() {
-      try {
-        var madness =
-          Lampa.Storage.get(
-            "drxaos_supermenu_madness",
-            SuperMenuConfig.FEATURES.madness ? "true" : "false"
-          ) === "true";
+  // ============================================================================
+  // ТОЧКА ВХОДА И ИНИЦИАЛИЗАЦИЯ
+  // ============================================================================
 
-        var perfMode = Lampa.Storage.get(
-          "drxaos_supermenu_perf_mode",
-          SuperMenuConfig.PLATFORM.isAndroid ? "android_perf" : "normal"
-        );
+  var supermenu_inited = false;
 
-        var ratingsTmdb =
-          Lampa.Storage.get(
-            "drxaos_supermenu_ratings_tmdb",
-            SuperMenuConfig.FEATURES.ratings_tmdb ? "true" : "false"
-          ) === "true";
-
-        var ratingsImdb =
-          Lampa.Storage.get(
-            "drxaos_supermenu_ratings_imdb",
-            SuperMenuConfig.FEATURES.ratings_imdb ? "true" : "false"
-          ) === "true";
-
-        var ratingsKp =
-          Lampa.Storage.get(
-            "drxaos_supermenu_ratings_kp",
-            SuperMenuConfig.FEATURES.ratings_kp ? "true" : "false"
-          ) === "true";
-
-        var labelColors =
-          Lampa.Storage.get(
-            "drxaos_supermenu_label_colors",
-            SuperMenuConfig.FEATURES.label_colors ? "true" : "false"
-          ) === "true";
-
-        var labelScheme = Lampa.Storage.get(
-          "drxaos_supermenu_label_scheme",
-          SuperMenuConfig.LABEL_SCHEME
-        );
-
-        var topbarExit =
-          Lampa.Storage.get(
-            "drxaos_supermenu_topbar_exit",
-            SuperMenuConfig.FEATURES.topbar_exit_menu ? "true" : "false"
-          ) === "true";
-
-        var madnessLevel = Lampa.Storage.get(
-          "drxaos_supermenu_madness_level",
-          SuperMenuConfig.FEATURES.madness_level || "normal"
-        );
-
-        var borderlessTheme =
-          Lampa.Storage.get(
-            "drxaos_supermenu_borderless_dark",
-            SuperMenuConfig.FEATURES.borderless_dark_theme
-              ? "true"
-              : "false"
-          ) === "true";
-
-        var voiceoverTracking =
-          Lampa.Storage.get(
-            "drxaos_supermenu_voiceover_tracking",
-            SuperMenuConfig.FEATURES.voiceover_tracking
-              ? "true"
-              : "false"
-          ) === "true";
-
-        SuperMenuConfig.FEATURES.madness = madness;
-        SuperMenuConfig.FEATURES.ratings_tmdb = ratingsTmdb;
-        SuperMenuConfig.FEATURES.ratings_imdb = ratingsImdb;
-        SuperMenuConfig.FEATURES.ratings_kp = ratingsKp;
-        SuperMenuConfig.FEATURES.label_colors = labelColors;
-        SuperMenuConfig.FEATURES.topbar_exit_menu = topbarExit;
-        SuperMenuConfig.FEATURES.borderless_dark_theme = borderlessTheme;
-        SuperMenuConfig.FEATURES.voiceover_tracking = voiceoverTracking;
-        SuperMenuConfig.VOICEOVER.enabled = voiceoverTracking;
-
-        if (labelScheme === "vivid" || labelScheme === "soft") {
-          SuperMenuConfig.LABEL_SCHEME = labelScheme;
-        }
-
-        if (
-          madnessLevel === "off" ||
-          madnessLevel === "normal" ||
-          madnessLevel === "full"
-        ) {
-          SuperMenuConfig.FEATURES.madness_level = madnessLevel;
-        }
-
-        if (perfMode === "android_perf") {
-          SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY = 500;
-          SuperMenuConfig.PERFORMANCE.THROTTLE_LIMIT = 150;
-          SuperMenuConfig.PERFORMANCE.MUTATION_THROTTLE = 80;
-        } else {
-          SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY = 300;
-          SuperMenuConfig.PERFORMANCE.THROTTLE_LIMIT = 100;
-          SuperMenuConfig.PERFORMANCE.MUTATION_THROTTLE = 50;
-        }
-      } catch (e) {
-        log("applyUserSettings error:", e);
-      }
-    }
-
-    function registerTopBarButton() {
-      try {
-        if (!SuperMenuConfig.FEATURES.topbar_exit_menu) return;
-
-        if (Lampa && Lampa.Panel && Lampa.Panel.add) {
-          Lampa.Panel.add({
-            name: "drxaos_supermenu_exit",
-            title: "Меню выхода",
-            icon:
-              '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-              '<path d="M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-              '<path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-              "</svg>",
-            onClick: function () {
-              exitMenuOpen();
-            }
-          });
-        } else {
-          log("Panel API недоступен, кнопка верхней панели не будет добавлена");
-        }
-      } catch (e) {
-        log("registerTopBarButton error:", e);
-      }
-    }
-
-    function onSettingsChanged(event) {
-      try {
-        if (!event || !event.name) return;
-        var name = event.name;
-
-        if (name.indexOf("drxaos_supermenu_") === 0) {
-          applyUserSettings();
-          injectBorderlessDarkTheme();
-          var titleEl = document.querySelector(
-            ".head .head__title, .simple-title, .section__title"
-          );
-          if (titleEl) madnessDecorateSectionTitle(titleEl);
-        }
-      } catch (e) {
-        log("onSettingsChanged error:", e);
-      }
-    }
-
-
-    // === ЭКСПОРТ ВНЕШНЕГО API ===
+  function supermenu_start() {
+    if (supermenu_inited) return;
+    supermenu_inited = true;
 
     try {
-      window.DrxSuperMenu = window.DrxSuperMenu || {};
-      window.DrxSuperMenu.colorizeLabelsInContainer =
-        colorizeLabelsInContainer;
+      log('Initialization started');
 
-      window.DrxSuperMenu.getTmdbRating = getTmdbRating;
-      window.DrxSuperMenu.getImdbRating = getImdbRating;
-      window.DrxSuperMenu.getKpRating = getKpRating;
+      // Регистрируем настройки
+      setTimeout(function() {
+        addSettings();
+      }, 200);
 
-      window.DrxSuperMenu.setBorderlessDarkThemeEnabled =
-        setBorderlessDarkThemeEnabled;
+      // Применяем функционал плагина
+      applyUserSettings();
+      injectBorderlessDarkTheme();
+      registerTopBarButton();
+      initMadnessSectionHooks();
 
-      window.DrxSuperMenu.rememberVoiceoverSelection =
-        rememberVoiceoverSelection;
-      window.DrxSuperMenu.checkVoiceoverUpdate = checkVoiceoverUpdate;
-    } catch (e) {
-      log("Export DrxSuperMenu API error:", e);
-    }
-
-    // === ЗАПУСК ===
-    setTimeout(function () {
+      // Подписываемся на изменение настроек
       try {
-        registerSettings();
-      } catch (e) {
-        log('registerSettings error:', e);
-      }
-    }, 200);
-
-    applyUserSettings();
-    injectBorderlessDarkTheme();
-    registerTopBarButton();
-    initMadnessSectionHooks();
-
-
-
-    try {
-      if (
-        Lampa.Storage &&
-        Lampa.Storage.listener &&
-        Lampa.Storage.listener.follow
-      ) {
-        Lampa.Storage.listener.follow("change", onSettingsChanged);
-      }
-    } catch (e) {
-      log("Storage listener attach error:", e);
-    }
-      
-    // === ТОЧКА ВХОДА SUPERMENU ДЛЯ LAMPA 3.0 ===
-    var supermenu_inited = false;
-
-    function supermenu_start() {
-        if (supermenu_inited) return;
-        supermenu_inited = true;
-        try {
-            init();
-        } catch (e) {
-            console.error('[SuperMenu] init error:', e);
+        if (Lampa.Storage && Lampa.Storage.listener && Lampa.Storage.listener.follow) {
+          Lampa.Storage.listener.follow("change", onSettingsChanged);
         }
-    }
+      } catch (e) {
+        logError("Storage listener attach error", e);
+      }
 
-    if (typeof Lampa !== 'undefined' && Lampa.Listener && Lampa.Listener.follow) {
-        // Инициализация, когда приложение готово
-        Lampa.Listener.follow('app', function (e) {
-            if (e.type === 'ready') supermenu_start();
-        });
-
-        // На случай, если скрипт подцеплен уже после ready
-        if (window.appready) supermenu_start();
-    } else {
-        // Фолбэк для старых/нестандартных окружений
-        document.addEventListener('DOMContentLoaded', function () {
-            if (typeof Lampa !== 'undefined') supermenu_start();
-        });
+      log('Initialization complete');
+    } catch (e) {
+      logError('init error', e);
     }
+  }
+
+  // Подписка на события Lampa
+  if (typeof Lampa !== 'undefined' && Lampa.Listener && Lampa.Listener.follow) {
+    Lampa.Listener.follow('app', function (e) {
+      if (e.type === 'ready') supermenu_start();
+    });
+
+    if (window.appready) supermenu_start();
+  } else {
+    document.addEventListener('DOMContentLoaded', function () {
+      if (typeof Lampa !== 'undefined') supermenu_start();
+    });
+  }
+
 })();
