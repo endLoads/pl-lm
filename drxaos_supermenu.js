@@ -888,10 +888,13 @@ body.drx-borderless-active .card__view {
                 return;
             }
 
+            // SVG icon for settings menu
+            var settings_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6M1 12h6m6 0h6"></path></svg>';
+
             Lampa.SettingsApi.addComponent({
                 component: 'drx_supermenu',
                 name: 'DrxSuperMenu',
-                icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6M1 12h6m6 0h6"></path></svg>'
+                icon: settings_icon
             });
 
             Lampa.SettingsApi.addParam({
@@ -1080,17 +1083,41 @@ body.drx-borderless-active .card__view {
     // MAIN INITIALIZATION
     // ============================================================================
 
-    try {
-        initializeConfig();
-        initializeCardColoring();
-        toggleBorderlessTheme(drxaosSafeGet('drx_borderless_theme', false));
-        initializeExitMenu();
-        initializeSettings();
-        exportPublicAPI();
+    function startPlugin() {
+        try {
+            console.log('[DrxSuperMenu] Starting plugin initialization...');
+            
+            initializeConfig();
+            initializeCardColoring();
+            toggleBorderlessTheme(drxaosSafeGet('drx_borderless_theme', false));
+            initializeExitMenu();
+            initializeSettings();
+            exportPublicAPI();
 
-        console.log('[DrxSuperMenu] v1.0.0 - Plugin initialization complete');
-    } catch (err) {
-        console.error('[DrxSuperMenu] Initialization error:', err);
+            console.log('[DrxSuperMenu] v1.0.0 - Plugin initialization complete');
+        } catch (err) {
+            console.error('[DrxSuperMenu] Initialization error:', err);
+        }
+    }
+
+    // Wait for Lampa app to be ready before initializing
+    if (window.appready) {
+        // App is already ready, start immediately
+        startPlugin();
+    } else {
+        // Wait for app ready event
+        if (Lampa.Listener && typeof Lampa.Listener.follow === 'function') {
+            Lampa.Listener.follow('app', function (e) {
+                if (e.type === 'ready') {
+                    startPlugin();
+                }
+            });
+        } else {
+            // Fallback: wait for window load event
+            window.addEventListener('load', function () {
+                setTimeout(startPlugin, 1000);
+            });
+        }
     }
 
 })();
