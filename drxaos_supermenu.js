@@ -1,399 +1,372 @@
-// DRXAOS SuperMenu v1.0 - Enhanced Menu with Top Bar Button and Card Data Integration
-// Based on drxaos_theme structure for Lampa 3.0 compatibility
-// Author: Assistant, adapted from user's code and drxaos_theme
+(function () {
+  "use strict";
 
-(function() {
-    'use strict';
+  // ============================================================================
+  // ЛОГИРОВАНИЕ & CONFIG
+  // ============================================================================
 
-    // Lampa 3.0 Compatibility Layer (from drxaos_theme)
-    if (typeof Element !== 'undefined') {
-        if (!Element.prototype.addClass) Element.prototype.addClass = function(classes) {
-            classes.split(' ').forEach(c => { if (c) this.classList.add(c); });
-            return this;
-        };
-        if (!Element.prototype.removeClass) Element.prototype.removeClass = function(classes) {
-            classes.split(' ').forEach(c => { if (c) this.classList.remove(c); });
-            return this;
-        };
-        if (!Element.prototype.toggleClass) Element.prototype.toggleClass = function(classes, status) {
-            classes.split(' ').forEach(c => {
-                if (!c) return;
-                var has = this.classList.contains(c);
-                if (status !== has) {
-                    if (status) this.classList.add(c); else this.classList.remove(c);
-                }
-            });
-            return this;
-        };
-        if (!Element.prototype.hasClass) Element.prototype.hasClass = function(className) {
-            return this.classList.contains(className);
-        };
+  var SuperMenuConfig = {
+    DEBUG: true,
+    FEATURES: {
+      madness: false,
+      madness_level: 'normal',
+      ratings_tmdb: true,
+      ratings_imdb: false,
+      ratings_kp: false,
+      label_colors: true,
+      topbar_exit_menu: true,
+      borderless_dark_theme: false,
+      voiceover_tracking: false
+    },
+    PLATFORM: {
+      isAndroid: (typeof Lampa !== 'undefined' && Lampa.Platform) ? Lampa.Platform.is('android') : false
     }
+  };
 
-    // jQuery Compatibility (fallback)
-    var $ = window.jQuery || window.Lampa.$ || (function() {
-        var jQ = { find: function(s) { return document.querySelectorAll(s); }, each: function(fn) { this.forEach(fn); } };
-        return { find: function(s) { return Array.from(document.querySelectorAll(s)); } };
-    })();
+  function log(msg) {
+    if (!SuperMenuConfig.DEBUG) return;
+    try {
+      console.log("[SuperMenu]", msg);
+    } catch (e) {}
+  }
 
-    // Config
-    var CONFIG = {
-        PLUGINNAME: 'drxaos_supermenu',
-        VERSION: '1.0',
-        BUILTINTMDBKEY: 'c87a543116135a4120443155bf680876', // From drxaos_theme
-        JACREDURL: 'jacred.xyz',
-        DEBOUNCEDELAY: 300
+  function logError(msg, err) {
+    try {
+      console.error("[SuperMenu ERROR]", msg, err && err.message ? err.message : err);
+    } catch (e) {}
+  }
+
+  // ============================================================================
+  // УТИЛИТЫ
+  // ============================================================================
+
+  function debounce(fn, delay) {
+    var timeout;
+    return function() {
+      var ctx = this;
+      var args = arguments;
+      clearTimeout(timeout);
+      timeout = setTimeout(function() {
+        fn.apply(ctx, args);
+      }, delay || 300);
     };
+  }
 
-    // Storage Helpers (safe get/set from drxaos_theme)
-    function safeGet(key, defaultValue) {
-        try {
-            if (!window.Lampa || !Lampa.Storage) return defaultValue;
-            var value = Lampa.Storage.get(key, defaultValue);
-            return value !== undefined ? value : defaultValue;
-        } catch (e) {
-            console.warn('[SuperMenu] Storage.get error', e);
-            return defaultValue;
-        }
-    }
-    function safeSet(key, value) {
-        try {
-            if (!window.Lampa || !Lampa.Storage) return false;
-            Lampa.Storage.set(key, value);
-            return true;
-        } catch (e) {
-            console.warn('[SuperMenu] Storage.set error', e);
-            return false;
-        }
-    }
+  // ============================================================================
+  // КНОПКА В ТОПБАРЕ (по паттерну drxaos_theme - initUtilitiesButton)
+  // ============================================================================
 
-    // Caches for Card Data (from drxaos_theme)
-    var CARD_DATA_STORAGE = new WeakMap();
-    var CARD_DATA_INDEX = new Map();
-    var TMDB_CACHE = {}; // Simple cache for TMDB fetches
+  var topbarButton = { el: null, menu: null, isOpen: false };
 
-    // Fetch TMDB Data (adapted from drxaos_theme)
-    function fetchTMDB(id, type, key) {
-        return new Promise((resolve) => {
-            if (!id || !window.Lampa?.TMDB) {
-                resolve(null);
-                return;
-            }
-            key = key || safeGet('tmdbapikey') || CONFIG.BUILTINTMDBKEY;
-            if (!key) {
-                resolve(null);
-                return;
-            }
-            var query = `${type}/${id}?language=en-US&api_key=${key}`;
-            var url = Lampa.TMDB.api + query;
-            fetch(url).then(response => response.ok ? response.json() : null)
-                .then(data => {
-                    if (!data) resolve(null);
-                    else {
-                        var result = {
-                            vote_average: data.vote_average,
-                            release_date: data.release_date || data.first_air_date,
-                            original_title: data.original_title || data.original_name,
-                            countries: data.production_countries?.map(c => c.iso_3166_1).filter(Boolean) || []
-                        };
-                        TMDB_CACHE[id] = result;
-                        resolve(result);
-                    }
-                }).catch(() => resolve(null));
+  function injectTopbarButton() {
+    try {
+      if (!SuperMenuConfig.FEATURES.topbar_exit_menu) return;
+      if (topbarButton.el) return;
+      if (!Lampa || !Lampa.Head || !Lampa.Head.render) {
+        setTimeout(injectTopbarButton, 500);
+        return;
+      }
+
+      var headActions = Lampa.Head.render.find('.headactions');
+      if (!headActions || !headActions.length) {
+        setTimeout(injectTopbarButton, 500);
+        return;
+      }
+
+      // HTML кнопки (SVG + стили, как в drxaos)
+      var btnHtml = '<div class="drxaos-exit-btn selector" style="' +
+        'position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;' +
+        'width:2em;height:2em;border-radius:0.3em;transition:all 0.3s ease;' +
+        '">' +
+        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="width:1.5em;height:1.5em;">' +
+        '<path d="M14.5 9.5L9.5 14.5M9.5 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+        '<path d="M22 12C22 16.714 20.536 20.536 16.714 20.536C12.892 20.536 9.171 20.536 5.357 20.536C1.543 20.536 0 20.536 3.464 20.536" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+        '</svg>' +
+        '</div>';
+
+      topbarButton.el = $(btnHtml);
+      headActions.append(topbarButton.el);
+
+      // Обработчик клика
+      topbarButton.el.on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleExitMenu();
+      });
+
+      // Обработчик Lampa-фокуса
+      if (Lampa.Controller && Lampa.Controller.listener) {
+        topbarButton.el.on('hover', function(type) {
+          if (type === 'enter') {
+            topbarButton.el.addClass('focus');
+          } else if (type === 'leave') {
+            topbarButton.el.removeClass('focus');
+          }
         });
+      }
+
+      // Стили для фокуса
+      if (!document.getElementById('drxaos-exit-btn-styles')) {
+        var style = document.createElement('style');
+        style.id = 'drxaos-exit-btn-styles';
+        style.textContent = '.drxaos-exit-btn { color: #fff; } ' +
+          '.drxaos-exit-btn:hover, .drxaos-exit-btn.focus { background-color: rgba(255,255,255,0.1); transform: scale(1.1); }' +
+          '.drxaos-exit-menu { position: absolute; top: calc(100% + 0.5em); right: 0; background: rgba(0,0,0,0.95); ' +
+          'border: 1px solid #444; border-radius: 0.5em; padding: 0.5em; min-width: 200px; z-index: 10000; }' +
+          '.drxaos-exit-menu-item { padding: 0.8em 1em; cursor: pointer; border-radius: 0.3em; ' +
+          'transition: all 0.2s ease; color: #fff; } ' +
+          '.drxaos-exit-menu-item:hover, .drxaos-exit-menu-item.focus { background-color: #333; }';
+        document.head.appendChild(style);
+      }
+
+      log('Topbar button injected');
+    } catch (e) {
+      logError('injectTopbarButton', e);
     }
+  }
 
-    // Fetch JacRed Quality (adapted)
-    function fetchJacRed(title, year) {
-        return new Promise((resolve) => {
-            var url = safeGet('jacredurl') || CONFIG.JACREDURL;
-            if (!url || !title) {
-                resolve('HD'); // Fallback
-                return;
-            }
-            url = `https://${url}/api/v2.2/quick?text=${encodeURIComponent(title + ' ' + year)}&limit=1`;
-            fetch(url).then(response => response.json())
-                .then(data => {
-                    if (data.data && data.data[0]) {
-                        var quality = data.data[0].quality || 'HD';
-                        resolve(quality);
-                    } else resolve('HD');
-                }).catch(() => resolve('HD'));
-        });
-    }
-
-    // Remember/Lookup Card Data (from drxaos_theme)
-    function rememberCardData(element, data) {
-        try {
-            var clone = Object.assign({}, data);
-            var keys = [element.dataset.id || '', element.dataset.tmdb || '', data.id || '', data.tmdbid || ''].filter(Boolean);
-            keys.forEach(key => CARD_DATA_INDEX.set(key, clone));
-            CARD_DATA_STORAGE.set(element, clone);
-        } catch (e) {
-            console.error('[SuperMenu] Remember card data failed', e);
-        }
-    }
-    function lookupCardData(element) {
-        try {
-            var keys = [element.dataset.id || '', element.dataset.tmdb || ''].filter(Boolean);
-            for (var i = 0; i < keys.length; i++) {
-                var stored = CARD_DATA_INDEX.get(keys[i]);
-                if (stored) return Object.assign({}, stored);
-            }
-            return null;
-        } catch (e) {
-            console.error('[SuperMenu] Lookup card data failed', e);
-            return null;
-        }
-    }
-
-    // Enhance Card with Data
-    function enhanceCard(card) {
-        if (!card || card.hasClass('drxaos-enhanced')) return;
-        card.addClass('drxaos-enhanced');
-
-        var data = lookupCardData(card) || {};
-        var tmdbId = data.tmdbid || card.dataset.tmdb || '';
-        var type = data.name ? 'tv' : 'movie';
-        var title = data.title || card.querySelector('.card__title')?.textContent.trim() || '';
-        var year = data.year || card.querySelector('.card__year')?.textContent.match(/\d{4}/)?.[0] || '';
-
-        // Fetch and Apply TMDB Data
-        if (tmdbId) {
-            fetchTMDB(tmdbId, type).then(tmdbData => {
-                if (tmdbData) {
-                    rememberCardData(card, Object.assign(data, tmdbData));
-                    var voteEl = card.querySelector('.card__vote') || document.createElement('div');
-                    voteEl.className = 'card__vote drxaos-vote';
-                    voteEl.textContent = `${tmdbData.vote_average?.toFixed(1) || 'N/A'} ⭐`;
-                    voteEl.style.cssText = 'color: #FFD700; font-weight: bold; text-shadow: 0 0 3px rgba(0,0,0,0.9); position: absolute; top: 5px; right: 5px; z-index: 10;';
-                    card.appendChild(voteEl);
-
-                    var countryEl = document.createElement('div');
-                    countryEl.className = 'card__country drxaos-country';
-                    countryEl.textContent = tmdbData.countries.join(', ') || 'N/A';
-                    countryEl.style.cssText = 'color: #FFD700; font-size: 0.8em; position: absolute; bottom: 5px; left: 5px; z-index: 10;';
-                    card.appendChild(countryEl);
-                }
-            });
-        }
-
-        // Fetch JacRed Quality
-        if (title && year) {
-            fetchJacRed(title, year).then(quality => {
-                var qualityEl = card.querySelector('.card__quality') || document.createElement('div');
-                qualityEl.className = 'card__quality drxaos-quality';
-                qualityEl.textContent = quality;
-                qualityEl.style.cssText = 'background: rgba(0,0,0,0.7); color: #FFD700; padding: 2px 5px; border-radius: 3px; position: absolute; top: 5px; left: 5px; z-index: 10; font-weight: bold;';
-                card.appendChild(qualityEl);
-            });
-        }
-    }
-
-    // MutationObserver for Cards (from drxaos_theme)
-    function initCardObserver() {
-        var observer = new MutationObserver((mutations) => {
-            mutations.forEach(mutation => {
-                if (mutation.type === 'childList') {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === 1 && node.classList?.contains('card')) {
-                            enhanceCard(node);
-                        } else {
-                            node.querySelectorAll?.('.card').forEach(enhanceCard);
-                        }
-                    });
-                }
-            });
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    // Top Bar Button (adapted from addQuickThemeButton in drxaos_theme)
-    function addSuperMenuButton() {
-        if ($('.drxaos-supermenu-btn').length) return;
-        if (!window.jQuery) {
-            console.error('[SuperMenu] jQuery not available');
-            return;
-        }
-
-        var headActions = $('.head .actions').length ? $('.head .actions') :
-                         $('.head .headbody').length ? $('.head .headbody') :
-                         $('.head').length ? $('.head') : $('header');
-        if (!headActions.length) {
-            console.error('[SuperMenu] Could not find head actions container');
-            return;
-        }
-
-        var btn = $('<div class="head__action drxaos-supermenu-btn selector" data-action="drxaos-supermenu">\
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">\
-                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" fill="currentColor"></path>\
-            </svg>\
-        </div>');
-
-        try {
-            headActions.prepend(btn);
-        } catch (e) {
-            try {
-                headActions.append(btn);
-            } catch (e2) {
-                console.error('[SuperMenu] Could not add button', e2);
-                return;
-            }
-        }
-
-        btn.on('hover:enter hover:click touchstart', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleSuperMenu();
-            return false;
-        });
-
-        console.log('[SuperMenu] Button added successfully');
-    }
-
-    // Super Menu Toggle (your original menu, enhanced)
-    function toggleSuperMenu() {
-        var menu = $('.drxaos-supermenu-modal');
-        if (menu.length) {
-            menu.remove();
-            document.off('keydown.supermenu');
-        } else {
-            createSuperMenu();
-        }
-    }
-
-    function createSuperMenu() {
-        var modal = $('<div class="drxaos-supermenu-modal"></div>');
-        var overlay = $('<div class="drxaos-modal-overlay"></div>');
-        var content = $('<div class="drxaos-modal-content"></div>');
-        var title = $('<h2 class="drxaos-modal-title">SuperMenu Settings</h2>');
-        var themesGrid = $('<div class="drxaos-themes-grid"></div>');
-
-        // Themes List (example from drxaos_theme)
-        var themes = [
-            {id: 'midnight', name: 'Midnight', icon: '🌙'},
-            {id: 'crimson', name: 'Crimson', icon: '🔴'},
-            // Add more as needed
-        ];
-
-        themes.forEach(theme => {
-            var themeBtn = $(`<div class="drxaos-theme-item" data-theme="${theme.id}" tabindex="0">\
-                <span class="drxaos-theme-icon">${theme.icon}</span>\
-                <span class="drxaos-theme-name">${theme.name}</span>\
-            </div>`);
-            themeBtn.on('click touchstart keydown', (e) => {
-                if (e.type === 'keydown' && e.key !== 'Enter' && e.keyCode !== 13 && e.keyCode !== 32) return;
-                e.preventDefault();
-                safeSet('supermenu_theme', theme.id);
-                applySuperMenu(theme.id);
-                toggleSuperMenu();
-            });
-            themesGrid.append(themeBtn);
-        });
-
-        // TMDB/JacRed Settings
-        var tmdbSection = $('<div class="drxaos-section">\
-            <button class="drxaos-btn" data-action="tmdb">Set TMDB API Key</button>\
-        </div>');
-        tmdbSection.find('[data-action="tmdb"]').on('click', () => openApiInput('tmdbapikey', 'TMDB API Key', 'Enter 32-char key'));
-        content.append(title).append(themesGrid).append(tmdbSection);
-
-        modal.append(overlay.append(content));
-        $('body').append(modal);
-
-        overlay.on('click touchstart', (e) => {
-            if (e.type === 'touchstart') e.preventDefault();
-            toggleSuperMenu();
-        });
-
-        document.on('keydown.supermenu', (e) => {
-            if (e.key === 'Escape' || e.keyCode === 27) toggleSuperMenu();
-        });
-
-        // Focus first item
-        setTimeout(() => themesGrid.find('.drxaos-theme-item').first().focus(), 100);
-    }
-
-    // Apply Super Menu Changes (debounce from drxaos_theme)
-    function applySuperMenu(theme) {
-        var applyImmediate = function(t) {
-            // Apply theme styles (example CSS injection)
-            var styleId = 'supermenu-style';
-            $('#' + styleId).remove();
-            var style = $(`<style id="${styleId}">\
-                body { background: ${t === 'midnight' ? '#000' : '#200'}; }\
-                .card { border: 1px solid #FFD700; } /* Example */\
-            </style>`);
-            $('head').append(style);
-
-            // Re-enhance cards
-            $('.card').removeClass('drxaos-enhanced').each(enhanceCard);
-        };
-        // Debounce
-        clearTimeout(window.supermenuTimeout);
-        window.supermenuTimeout = setTimeout(() => applyImmediate(theme || safeGet('supermenu_theme', 'midnight')), CONFIG.DEBOUNCEDELAY);
-    }
-
-    // API Input Modal (from drxaos_theme)
-    function openApiInput(param, title, placeholder) {
-        var modal = $(`<div class="drxaos-api-modal" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;">\
-            <div style="background: #1a1a1a; border:1px solid #333; border-radius:8px; padding:20px; min-width:300px;">\
-                <h3 style="color:#fff; margin:0 0 15px;">${title}</h3>\
-                <input type="text" id="api-input" placeholder="${placeholder}" style="width:100%; padding:10px; border:1px solid #444; border-radius:4px; background:#2a2a2a; color:#fff;">\
-                <div style="display:flex; gap:10px; justify-content:flex-end;">\
-                    <button id="save-api" style="background:#007bff; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer;">Save</button>\
-                    <button id="cancel-api" style="background:#6c757d; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer;">Cancel</button>\
-                </div>\
-            </div>\
-        </div>`);
-        $('body').append(modal);
-
-        var input = $('#api-input');
-        setTimeout(() => input.focus().select(), 100);
-
-        $('#save-api').on('click', () => {
-            var value = input.val().trim();
-            safeSet(param, value);
-            if (param === 'tmdbapikey') applySuperMenu(); // Refresh cards
-            modal.remove();
-            if (window.Lampa?.Noty) Lampa.Noty.show(`${title} saved!`);
-        });
-        $('#cancel-api, .drxaos-api-modal').on('click', () => modal.remove());
-
-        document.on('keydown.api', (e) => {
-            if (e.key === 'Escape') modal.remove();
-            if (e.key === 'Enter') $('#save-api').click();
-        });
-    }
-
-    // Init on Ready
-    function init() {
-        if (!window.Lampa) {
-            setTimeout(init, 200);
-            return;
-        }
-        addSuperMenuButton();
-        initCardObserver();
-        applySuperMenu(); // Initial apply
-
-        // Listener for updates (from drxaos_theme)
-        if (Lampa.Listener) {
-            Lampa.Listener.follow('app', () => {
-                setTimeout(() => {
-                    addSuperMenuButton();
-                    $('.card').each(enhanceCard);
-                }, 500);
-            });
-        }
-    }
-
-    // Start
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+  function toggleExitMenu() {
+    if (topbarButton.isOpen) {
+      closeExitMenu();
     } else {
-        init();
+      openExitMenu();
+    }
+  }
+
+  function openExitMenu() {
+    if (!topbarButton.el) return;
+    if (topbarButton.menu) {
+      topbarButton.menu.show();
+      topbarButton.isOpen = true;
+      return;
     }
 
-    // Expose for debugging
-    window.SuperMenu = { toggle: toggleSuperMenu, apply: applySuperMenu };
+    var menuHtml = '<div class="drxaos-exit-menu">' +
+      '<div class="drxaos-exit-menu-item selector" data-action="reload">🔄 Перезагрузить</div>' +
+      '<div class="drxaos-exit-menu-item selector" data-action="clear_cache">🗑️ Очистить кэш</div>' +
+      '<div class="drxaos-exit-menu-item selector" data-action="exit">🚪 Выход</div>' +
+      '</div>';
+
+    topbarButton.menu = $(menuHtml);
+    topbarButton.el.append(topbarButton.menu);
+
+    topbarButton.menu.find('.drxaos-exit-menu-item').on('click', function(e) {
+      e.preventDefault();
+      var action = $(this).data('action');
+      handleMenuAction(action);
+      closeExitMenu();
+    });
+
+    topbarButton.isOpen = true;
+    log('Exit menu opened');
+  }
+
+  function closeExitMenu() {
+    if (topbarButton.menu) {
+      topbarButton.menu.hide();
+      topbarButton.isOpen = false;
+    }
+  }
+
+  function handleMenuAction(action) {
+    switch(action) {
+      case 'reload':
+        location.reload();
+        break;
+      case 'clear_cache':
+        try {
+          Lampa.Storage.clear();
+          Lampa.Noty && Lampa.Noty.show('Кэш очищен');
+        } catch(e) {}
+        break;
+      case 'exit':
+        try {
+          if (Lampa.Platform && Lampa.Platform.is('android')) {
+            Lampa.Android && Lampa.Android.exit();
+          } else if (Lampa.Platform && Lampa.Platform.is('webos')) {
+            window.close();
+          } else {
+            window.location.href = 'exit://exit';
+          }
+        } catch(e) {}
+        break;
+    }
+  }
+
+  // ============================================================================
+  // ХУКИ НА КАРТОЧКИ (RATINGS + LABELS)
+  // ============================================================================
+
+  try {
+    if (Lampa && Lampa.Listener && Lampa.Listener.follow) {
+      Lampa.Listener.follow('full', debounce(function(e) {
+        if (e.type !== 'complite') return;
+
+        // Получаем активность и рендер
+        var activity = e.object && e.object.activity;
+        if (!activity || typeof activity.render !== 'function') return;
+
+        var renderContent = activity.render();
+        if (!renderContent || !renderContent.find) return;
+
+        var fullStart = renderContent.find('.full-start, .full-info');
+        if (!fullStart || !fullStart.length) return;
+
+        // Пытаемся получить данные из разных мест
+        var card = e.data && (e.data.movie || e.data.item || e.data.card);
+        
+        // Если нет, пробуем через Lampa.Background
+        if (!card && Lampa.Background && Lampa.Background.current) {
+          try {
+            var bgData = Lampa.Background.current();
+            if (bgData && bgData.card) {
+              card = bgData.card;
+            }
+          } catch(err) {}
+        }
+
+        // Если всё ещё нет карточки - берём из активности
+        if (!card && e.object && e.object.card) {
+          card = e.object.card;
+        }
+
+        if (!card) {
+          log('No card data found');
+          return;
+        }
+
+        log('Card found:', card.title || card.name);
+
+        // Добавляем рейтинги
+        if (SuperMenuConfig.FEATURES.ratings_tmdb && card.vote_average) {
+          var ratingDiv = fullStart.find('.drxaos-rating-tmdb');
+          if (!ratingDiv.length) {
+            var rating = '<div class="drxaos-rating drxaos-rating-tmdb" style="margin-top:0.5em;font-size:0.9em;color:#03A9F4;">TMDB: ' +
+              Number(card.vote_average).toFixed(1) + '</div>';
+            fullStart.find('.full-start__detai, .full-info__text').first().append(rating);
+          }
+        }
+
+        // Добавляем метки
+        if (SuperMenuConfig.FEATURES.label_colors) {
+          var typeEl = fullStart.find('.card-type, .full-tag.tag--type');
+          if (typeEl.length && card.media_type) {
+            var colors = { 'movie': '#FFD54F', 'tv': '#4CAF50', 'anime': '#E91E63' };
+            var color = colors[card.media_type] || '#fff';
+            typeEl.css('color', color);
+          }
+        }
+
+      }, 150));
+      log('Full listener hooks registered');
+    }
+  } catch (e) {
+    logError('Full listener setup', e);
+  }
+
+  // ============================================================================
+  // СИНХРОНИЗАЦИЯ НАСТРОЕК
+  // ============================================================================
+
+  function applyUserSettings() {
+    try {
+      if (!Lampa || !Lampa.Storage) return;
+      SuperMenuConfig.FEATURES.madness = Lampa.Storage.get('supermenu_madness', 'false') === 'true';
+      SuperMenuConfig.FEATURES.ratings_tmdb = Lampa.Storage.get('supermenu_ratings_tmdb', 'true') === 'true';
+      SuperMenuConfig.FEATURES.label_colors = Lampa.Storage.get('supermenu_label_colors', 'true') === 'true';
+      SuperMenuConfig.FEATURES.topbar_exit_menu = Lampa.Storage.get('supermenu_topbar_exit', 'true') === 'true';
+      log('Settings applied');
+    } catch(err) {
+      logError('applyUserSettings', err);
+    }
+  }
+
+  // ============================================================================
+  // РЕГИСТРАЦИЯ НАСТРОЕК
+  // ============================================================================
+
+  function addSettings() {
+    try {
+      if (!Lampa || !Lampa.SettingsApi) return;
+      if (Lampa.SettingsApi.__superMenuAdded) return;
+      Lampa.SettingsApi.__superMenuAdded = true;
+
+      var defaults = {
+        'supermenu_madness': 'false',
+        'supermenu_ratings_tmdb': 'true',
+        'supermenu_label_colors': 'true',
+        'supermenu_topbar_exit': 'true'
+      };
+
+      Object.keys(defaults).forEach(function(key) {
+        if (!Lampa.Storage.get(key)) {
+          Lampa.Storage.set(key, defaults[key]);
+        }
+      });
+
+      Lampa.SettingsApi.addComponent({
+        component: 'supermenu',
+        name: 'SuperMenu',
+        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>'
+      });
+
+      var params = [
+        { name: 'supermenu_madness', type: 'trigger', title: 'MADNESS режим', desc: 'Визуальные эффекты' },
+        { name: 'supermenu_ratings_tmdb', type: 'trigger', title: 'Рейтинг TMDB', desc: 'На карточках' },
+        { name: 'supermenu_label_colors', type: 'trigger', title: 'Цветные метки', desc: 'Для качества/типа' },
+        { name: 'supermenu_topbar_exit', type: 'trigger', title: 'Меню выхода в панели', desc: 'Кнопка сверху' }
+      ];
+
+      params.forEach(function(p) {
+        try {
+          Lampa.SettingsApi.addParam({
+            component: 'supermenu',
+            param: { name: p.name, type: p.type, default: p.type === 'trigger' ? false : 'default' },
+            field: { name: p.title, description: p.desc },
+            onChange: function(value) {
+              Lampa.Storage.set(p.name, value ? 'true' : 'false');
+              applyUserSettings();
+              injectTopbarButton(); // Перинициализация кнопки если её настройка изменилась
+            }
+          });
+        } catch(err) {
+          logError('Param ' + p.name, err);
+        }
+      });
+
+      log('Settings registered');
+    } catch (e) {
+      logError('addSettings', e);
+    }
+  }
+
+  // ============================================================================
+  // ИНИЦИАЛИЗАЦИЯ
+  // ============================================================================
+
+  var inited = false;
+
+  function start() {
+    if (inited) return;
+    inited = true;
+
+    setTimeout(addSettings, 200);
+    setTimeout(function() {
+      applyUserSettings();
+      injectTopbarButton();
+      log('SuperMenu started');
+    }, 500);
+  }
+
+  if (typeof Lampa !== 'undefined' && Lampa.Listener && Lampa.Listener.follow) {
+    Lampa.Listener.follow('app', function(e) {
+      if (e.type === 'ready') {
+        setTimeout(start, 500);
+      }
+    });
+    if (window.appready) start();
+  } else {
+    document.addEventListener('DOMContentLoaded', start);
+  }
+
 })();
