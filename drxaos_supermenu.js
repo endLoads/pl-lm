@@ -1,301 +1,318 @@
+/* drxaos_supermenu.is — переписанный плагин
+   Совместимость: Lampa 3.x (app_digital >= 305 рекоменд.)
+   Автор: рефакторинг для пользователя
+   Примечание: заполните TODO секции вашей логикой парсинга/рендера
+*/
 (function () {
-  "use strict";
+    'use strict';
 
-  // ============================================================================
-  // КОНФИГУРАЦИЯ
-  // ============================================================================
+    var PLUGIN_NAME = 'drxaos_supermenu';
+    var VERSION = '0.1.0-refactor';
 
-  var SuperMenuConfig = {
-    DEBUG: true,
-    PERFORMANCE: { DEBOUNCE_DELAY: 300, THROTTLE_LIMIT: 100 },
-    PLATFORM: { isAndroid: typeof Lampa !== 'undefined' && Lampa.Platform.is('android') },
-    RATINGS: {
-      kpApiKey: 'твой_ключ_с_kinopoiskapiunofficial.tech', // ЗАМЕНИ НА СВОЙ КЛЮЧ
-      kpApiUrl: 'https://kinopoiskapiunofficial.tech/api/v2.2/films'
-    },
-    RATING_CACHE: { tmdb: {}, imdb: {}, kp: {} },
-    LABEL_COLORS: {
-      vivid: {
-        TYPE: { movie: '#FFD54F', tv: '#4CAF50', anime: '#E91E63' },
-        QUALITY: { '4K': '#FF5722', '1080p': '#03A9F4', '720p': '#B0BEC5', SD: '#90A4AE', CAM: '#FF7043', HDR: '#FFC107' }
-      },
-      soft: {
-        TYPE: { movie: '#FFE082', tv: '#A5D6A7', anime: '#F48FB1' },
-        QUALITY: { '4K': '#FF9800', '1080p': '#81D4FA', '720p': '##C5E1A5', SD: '#BCAAA4', CAM: '#FFAB91', HDR: '#FFD54F' }
-      }
-    },
-    LABEL_SCHEME: 'vivid',
-    VOICEOVER: { enabled: false, cache: {} },
-    FEATURES: {
-      madness: false, madness_level: 'normal', ratings_tmdb: true, ratings_imdb: true,
-      ratings_kp: false, label_colors: true, topbar_exit_menu: true,
-      borderless_dark_theme: false, voiceover_tracking: false
+    // -----------------------
+    // Environment checks
+    // -----------------------
+    function log() {
+        if (window.console && console.log) console.log.apply(console, arguments);
     }
-  };
+    function logWarn() { if (window.console && console.warn) console.warn.apply(console, arguments); }
+    function logError() { if (window.console && console.error) console.error.apply(console, arguments); }
 
-  // ============================================================================
-  // ЛОГИРОВАНИЕ
-  // ============================================================================
+    if (typeof window === 'undefined') return;
 
-  function log() { if (SuperMenuConfig.DEBUG) console.log.apply(console, ["[SuperMenu]"].concat(Array.prototype.slice.call(arguments))); }
-  function logError(msg, err) { console.error("[SuperMenu ERROR] " + msg, err || ""); }
-
-  // ============================================================================
-  // УТИЛИТЫ (fetch, debounce)
-  // ============================================================================
-
-  function fetchJsonWithTimeout(url, options, timeoutMs) {
-    return new Promise(function (resolve, reject) {
-      var aborted = false;
-      var timeout = setTimeout(function () {
-        aborted = true;
-        reject(new Error("Timeout " + (timeoutMs || 8000) + "ms"));
-      }, timeoutMs || 8000);
-      fetch(url, options).then(function (res) {
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        return res.json();
-      }).then(function (json) {
-        if (!aborted) resolve(json);
-      }).catch(function (err) {
-        if (!aborted) reject(err);
-      });
-    });
-  }
-
-  var debounce = function (fn, delay) {
-    var timeout;
-    return function () {
-      var ctx = this, args = arguments;
-      clearTimeout(timeout);
-      timeout = setTimeout(function () { fn.apply(ctx, args); }, delay || SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY);
-    };
-  };
-
-  // ============================================================================
-  // РЕЙТИНГИ
-  // ============================================================================
-
-  function getRatingFromCache(source, key) { return SuperMenuConfig.RATING_CACHE[source][key] || null; }
-  function setRatingToCache(source, key, value) { SuperMenuConfig.RATING_CACHE[source][key] = value; }
-
-  function getKpRating(meta, cb) {
-    if (!SuperMenuConfig.FEATURES.ratings_kp) return cb && cb(null);
-    try {
-      var key = meta.kpId || meta.title;
-      var cached = getRatingFromCache("kp", key);
-      if (cached) return cb && cb(cached);
-      if (!SuperMenuConfig.RATINGS.kpApiKey) return cb && cb(null);
-      var url = SuperMenuConfig.RATINGS.kpApiUrl + "/search-by-keyword?keyword=" + encodeURIComponent(meta.title) + (meta.year ? "&yearFrom=" + meta.year + "&yearTo=" + meta.year : "");
-      fetchJsonWithTimeout(url, { headers: { "X-API-KEY": SuperMenuConfig.RATINGS.kpApiKey } })
-        .then(function (json) {
-          var film = (json && (json.items || json.films) && (json.items || json.films)[0]) || null;
-          if (!film) return cb && cb(null);
-          var value = Number(film.ratingKinopoisk || film.ratingImdb || film.rating || 0);
-          if (!isFinite(value)) return cb && cb(null);
-          var result = { source: "kp", value: value };
-          setRatingToCache("kp", key, result);
-          cb && cb(result);
-        })
-        .catch(function (err) {
-          logError("getKpRating fetch", err);
-          cb && cb(null);
-        });
-    } catch (e) {
-      logError("getKpRating", e);
-      cb && cb(null);
+    if (!window.Lampa) {
+        logError('[' + PLUGIN_NAME + '] Lampa API not found — abort.');
+        return;
     }
-  }
 
-  // ============================================================================
-  // UI-ФУНКЦИИ (тема, кнопка, метки, MADNESS)
-  // ============================================================================
-
-  var borderlessStyle = null;
-  function injectBorderlessTheme(enabled) {
-    if (!enabled) {
-      if (borderlessStyle) {
-        borderlessStyle.remove();
-        borderlessStyle = null;
-      }
-      return;
+    var requiredAPIs = ['Storage', 'SettingsApi', 'Activity', 'Listener', 'Template'];
+    var missing = requiredAPIs.filter(function (k) { return !Lampa[k]; });
+    if (missing.length) {
+        logError('[' + PLUGIN_NAME + '] Missing Lampa APIs:', missing.join(', '));
+        return;
     }
-    if (borderlessStyle) return;
-    try {
-      var css = ".card, .card--collection { border: none !important; box-shadow: 0 14px 40px rgba(0,0,0,0.75) !important; background: radial-gradient(circle at top, #1B1F27 0%, #0B0F16 55%, #05070A 100%) !important; } .card__title, .card__age, .card__tags { text-shadow: 0 0 4px rgba(0,0,0,0.9) !important; }";
-      borderlessStyle = document.createElement("style");
-      borderlessStyle.textContent = css;
-      document.head.appendChild(borderlessStyle);
-      log("Borderless theme injected");
-    } catch (e) { logError("injectBorderless", e); }
-  }
 
-  var topbarAdded = false;
-  function registerTopBar() {
-    if (!SuperMenuConfig.FEATURES.topbar_exit_menu || topbarAdded || !Lampa.Panel || typeof Lampa.Panel.add !== 'function') return;
-    try {
-      topbarAdded = true;
-      Lampa.Panel.add({
-        name: 'supermenu_exit', title: 'Меню',
-        icon: '<svg viewBox="0 0 24 24" fill="none"><path d="M14.5 9.5L9.5 14.5M9.5 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5"/><path d="M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z" stroke="currentColor" stroke-width="1.5"/></svg>',
-        onSelect: function () { Lampa.Noty.show("Меню SuperMenu"); } // Замени на exitMenuOpen, если есть
-      });
-      log("Topbar button added");
-    } catch (e) {
-      logError("registerTopBar", e);
-      topbarAdded = false;
-    }
-  }
-
-  function colorizeLabelsInContainer(container, meta) {
-    if (!SuperMenuConfig.FEATURES.label_colors || !container || !meta) return;
-    try {
-      var colors = SuperMenuConfig.LABEL_COLORS[SuperMenuConfig.LABEL_SCHEME] || SuperMenuConfig.LABEL_COLORS.vivid;
-      var typeEl = container.querySelector(".view--category, .card__type, .type-label, [data-type]");
-      var qualityEl = container.querySelector(".view--quality, .card__quality, .quality-label, [data-quality]");
-      if (typeEl && meta.type && colors.TYPE[meta.type]) typeEl.style.color = colors.TYPE[meta.type];
-      if (qualityEl && meta.quality) {
-        var q = meta.quality.toUpperCase();
-        var qKey = /2160|4k/i.test(q) ? "4K" : /1080/i.test(q) ? "1080p" : /720/i.test(q) ? "720p" : /cam/i.test(q) ? "CAM" : /hdr/i.test(q) ? "HDR" : "SD";
-        if (colors.QUALITY[qKey]) qualityEl.style.color = colors.QUALITY[qKey];
-      }
-    } catch (e) { logError("colorizeLabels", e); }
-  }
-  
-  function madnessDecorate(element) {
-    if (!SuperMenuConfig.FEATURES.madness || SuperMenuConfig.FEATURES.madness_level === "off" || !element) return;
-    try {
-      if (!element.dataset.original) element.dataset.original = element.textContent.trim();
-      var badge = '<span style="margin-left:0.35em;font-size:0.8em;opacity:0.8;">✦ MADNESS</span>';
-      element.innerHTML = '<span class="base">' + element.dataset.original + '</span>' + (SuperMenuConfig.FEATURES.madness_level !== "off" ? badge : "");
-      if (SuperMenuConfig.FEATURES.madness_level === "full") element.style.cssText = "letter-spacing:0.03em;text-shadow:0 0 6px rgba(0,0,0,0.85);";
-    } catch (e) { logError("madnessDecorate", e); }
-  }
-
-  // ============================================================================
-  // ХУКИ НА СОБЫТИЯ LAMPA
-  // ============================================================================
-
-  var hooksAdded = false;
-  function initHooks() {
-    if (hooksAdded) return;
-    hooksAdded = true;
-    try {
-      // Full-карточка
-      Lampa.Listener.follow('full', debounce(function (e) {
-        if (e.type !== 'complite') return;
-        var movie = e.data && (e.data.movie || e.data.card) || {};
-        var meta = { title: movie.title || "", year: parseInt(movie.year || ""), tmdbId: movie.id, kpId: movie.kinopoisk_id, type: movie.name ? 'tv' : 'movie', quality: movie.quality || "" };
-        var full = e.object.activity.render().find('.full-start, .full-info');
-        if (!full || !full[0]) return;
-        
-        colorizeLabelsInContainer(full[0], meta);
-        
-        if (SuperMenuConfig.FEATURES.ratings_tmdb || SuperMenuConfig.FEATURES.ratings_imdb || SuperMenuConfig.FEATURES.ratings_kp) {
-          var ratingsDiv = $('<div class="drx-ratings" style="display:flex;gap:0.5em;margin-top:0.5em;font-size:0.9em;opacity:0.9;"></div>');
-          if (SuperMenuConfig.FEATURES.ratings_tmdb && movie.vote_average) {
-            ratingsDiv.append($('<span style="color:#03A9F4;">TMDB: ' + movie.vote_average.toFixed(1) + '</span>'));
-            setRatingToCache("tmdb", meta.tmdbId, { value: movie.vote_average });
-          }
-          getKpRating(meta, function (res) { if (res && res.value) ratingsDiv.append($('<span style="color:#FF5722;">КП: ' + res.value.toFixed(1) + '</span>')); });
-          var insertPoint = full.find('.full-info__text, .full-start__body');
-          if (insertPoint.length) insertPoint.append(ratingsDiv); else full.append(ratingsDiv);
+    // -----------------------
+    // Safe Storage wrappers (как в DRXAOS Themes)
+    // -----------------------
+    function safeGet(key, defaultValue) {
+        try {
+            var v = Lampa.Storage.get(key);
+            return v === undefined ? defaultValue : v;
+        } catch (e) {
+            logWarn('['+PLUGIN_NAME+'] Storage.get error for', key, e);
+            return defaultValue;
         }
-      }, 100));
-
-      // Заголовки (для MADNESS)
-      Lampa.Controller.listener.follow("toggle", function () {
-        var titleEl = document.querySelector(".head__title, .simple-title, .section__title");
-        if (titleEl) madnessDecorate(titleEl);
-      });
-      
-      log("Hooks added (full, toggle)");
-    } catch (e) { logError("initHooks", e); }
-  }
-
-  // ============================================================================
-  // СИНХРОНИЗАЦИЯ И ОБРАБОТКА НАСТРОЕК
-  // ============================================================================
-
-  function applyUserSettings() {
-    if (typeof Lampa === 'undefined' || !Lampa.Storage) return;
-    try {
-      Object.keys(SuperMenuConfig.FEATURES).forEach(function (key) {
-        SuperMenuConfig.FEATURES[key] = Lampa.Storage.get('supermenu_' + key, SuperMenuConfig.FEATURES[key] + '') === 'true';
-      });
-      SuperMenuConfig.LABEL_SCHEME = Lampa.Storage.get('supermenu_label_scheme', SuperMenuConfig.LABEL_SCHEME);
-      log('Config synced from Storage');
-    } catch (err) { logError('applyUserSettings', err); }
-  }
-
-  function onSettingsChanged(e) {
-    if (!e || !e.name || !e.name.startsWith('supermenu_')) return;
-    log('Setting changed:', e.name, '→', e.value);
-    applyUserSettings();
-    
-    // Применяем
-    injectBorderlessTheme(SuperMenuConfig.FEATURES.borderless_dark_theme);
-    registerTopBar();
-    initHooks();
-  }
-
-  // ============================================================================
-  // РЕГИСТРАЦИЯ НАСТРОЕК
-  // ============================================================================
-
-  function addSettings() {
-    if (!Lampa || !Lampa.SettingsApi || Lampa.SettingsApi.__superMenuAdded) return;
-    Lampa.SettingsApi.__superMenuAdded = true;
-    
-    var defaults = { 'supermenu_madness': 'false', 'supermenu_ratings_tmdb': 'true', /* ... */ };
-    Object.keys(defaults).forEach(function(k) { if (Lampa.Storage.get(k) === undefined) Lampa.Storage.set(k, defaults[k]); });
-    
-    Lampa.SettingsApi.addComponent({ component: 'supermenu', name: 'SuperMenu', icon: '<svg>...</svg>' });
-
-    var params = [
-      { name: 'madness', type: 'trigger', def: false, title: 'MADNESS', desc: 'Эффекты' },
-      // ... и т.д. для всех 11 параметров
-    ];
-
-    params.forEach(function (p) {
-      try {
-        Lampa.SettingsApi.addParam({
-          component: 'supermenu',
-          param: { name: 'supermenu_' + p.name, type: p.type, default: p.def },
-          field: { name: p.title, description: p.desc },
-          onChange: function (v) { onSettingsChanged({ name: 'supermenu_' + p.name, value: v }); }
-        });
-      } catch (e) { logError('Param ' + p.name, e); }
-    });
-    log("Settings registered");
-  }
-
-  // ============================================================================
-  // ИНИЦИАЛИЗАЦИЯ
-  // ============================================================================
-
-  var inited = false;
-  function start() {
-    if (inited) return;
-    inited = true;
-    log("Starting SuperMenu");
-    
-    setTimeout(addSettings, 200);
-    setTimeout(function () {
-      applyUserSettings();
-      initHooks();
-      onSettingsChanged({name: "supermenu_init"}); // Применяем всё сразу
-    }, 500);
-
-    if (Lampa.Storage && Lampa.Storage.listener) {
-      Lampa.Storage.listener.follow('change', onSettingsChanged);
     }
-  }
+    function safeSet(key, value) {
+        try {
+            Lampa.Storage.set(key, value);
+            return true;
+        } catch (e) {
+            logWarn('['+PLUGIN_NAME+'] Storage.set error for', key, e);
+            return false;
+        }
+    }
+    function safeRemove(key) {
+        try {
+            Lampa.Storage.remove && Lampa.Storage.remove(key);
+        } catch (e) {
+            logWarn('['+PLUGIN_NAME+'] Storage.remove error for', key, e);
+        }
+    }
 
-  if (typeof Lampa !== 'undefined' && Lampa.Listener && Lampa.Listener.follow) {
-    Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') start(); });
-    if (window.appready) start();
-  } else {
-    document.addEventListener('DOMContentLoaded', start);
-  }
+    // -----------------------
+    // Persistent cache helper (TTL + size prune) — паттерн из темы
+    // -----------------------
+    function createPersistentCache(storageKey, limitBytes, ttlMs) {
+        limitBytes = typeof limitBytes === 'number' ? limitBytes : 100 * 1024;
+        ttlMs = typeof ttlMs === 'number' ? ttlMs : 72 * 60 * 60 * 1000;
 
+        var mem = {};
+
+        function now() { return Date.now(); }
+
+        function load() {
+            try {
+                var s = Lampa.Storage.get(storageKey);
+                if (typeof s === 'string') s = JSON.parse(s || '{}');
+                if (!s || typeof s !== 'object') s = {};
+                mem = s;
+            } catch (e) {
+                mem = {};
+            }
+            return Object.assign({}, mem);
+        }
+
+        function sizeOf(obj) {
+            try { return JSON.stringify(obj).length; } catch (e) { return Infinity; }
+        }
+
+        function prune(cache, lastKey) {
+            var keys = Object.keys(cache);
+            var cur = now();
+            keys.forEach(function (k) {
+                var it = cache[k];
+                if (!it || !it.ts || cur - it.ts > ttlMs) delete cache[k];
+            });
+
+            if (!limitBytes) return cache;
+
+            var sorted = Object.keys(cache).sort(function (a,b){ return cache[a].ts - cache[b].ts; });
+            var s = sizeOf(cache);
+            while (s > limitBytes && sorted.length) {
+                var cand = sorted.shift();
+                if (cand === lastKey && sorted.length === 0) break;
+                delete cache[cand];
+                s = sizeOf(cache);
+            }
+            if (limitBytes && lastKey && cache[lastKey] && sizeOf(cache) > limitBytes) {
+                delete cache[lastKey];
+            }
+            return cache;
+        }
+
+        function save(cache, lastKey) {
+            var normalized = prune(Object.assign({}, cache), lastKey);
+            mem = normalized;
+            try {
+                Lampa.Storage.set(storageKey, normalized);
+            } catch (e) { /* ignore */ }
+        }
+
+        return {
+            get: function (key) {
+                if (!key) return null;
+                var c = load();
+                var it = c[key];
+                if (!it) return null;
+                if (now() - it.ts > ttlMs) {
+                    delete c[key];
+                    save(c);
+                    return null;
+                }
+                return it.value;
+            },
+            set: function (key, value) {
+                if (!key) return;
+                var c = load();
+                c[key] = { value: value, ts: now() };
+                save(c, key);
+            },
+            remove: function (key) {
+                if (!key) return;
+                var c = load();
+                if (c.hasOwnProperty(key)) { delete c[key]; save(c); }
+            },
+            clear: function () { mem = {}; try { Lampa.Storage.set(storageKey, {}); } catch(e){} }
+        };
+    }
+
+    var qualityCache = createPersistentCache('drxaos_supermenu_quality', 100 * 1024, 72 * 60 * 60 * 1000);
+
+    // -----------------------
+    // Style manager helper
+    // -----------------------
+    var styleId = 'drxaos-supermenu-style';
+    function setStyle(id, css) {
+        try {
+            if (!id) id = styleId;
+            var existing = document.getElementById(id);
+            if (existing) {
+                existing.innerHTML = css;
+            } else {
+                var s = document.createElement('style');
+                s.id = id;
+                s.type = 'text/css';
+                s.innerHTML = css;
+                document.head.appendChild(s);
+            }
+        } catch (e) {
+            logWarn('['+PLUGIN_NAME+'] setStyle error', e);
+        }
+    }
+
+    // пример базового CSS (настраивайте)
+    var baseCSS = "\
+    /* DRXAOS SuperMenu base styles */\n\
+    .drx-supermenu-badge { font-weight:700; padding:2px 6px; border-radius:6px; background:rgba(0,0,0,0.6); color:#fff; font-size:0.85em; }\n\
+    .drx-supermenu-kp { color:#FF9800; margin-left:6px; font-weight:700; }\n\
+    ";
+    setStyle(styleId, baseCSS);
+
+    // -----------------------
+    // i18n
+    // -----------------------
+    try {
+        Lampa.Lang.add && Lampa.Lang.add({
+            drxaos_supermenu: {
+                ru: 'DRXAOS SuperMenu',
+                en: 'DRXAOS SuperMenu'
+            },
+            drxaos_supermenu_desc: {
+                ru: 'Расширенное меню и бейджи качества',
+                en: 'Extended menu and quality badges'
+            }
+        });
+    } catch (e) { /* non-critical */ }
+
+    // -----------------------
+    // Public API object
+    // -----------------------
+    var DrxSuperMenu = {
+        version: VERSION,
+        getQualityFromCache: function(key){ return qualityCache.get(key); },
+        setQualityToCache: function(key, value){ qualityCache.set(key, value); },
+        removeQualityFromCache: function(key){ qualityCache.remove(key); },
+
+        // Пример внешней интеграции: запрос рейтинга Кинопоиск (заглушка)
+        getKpRating: function (opts, cb) {
+            // opts: { title, year, kpId }
+            // TODO: вставьте реальную реализацию (запрос к вашему сервису/локальному кэшу).
+            // Для примера возвращаем null через setTimeout
+            setTimeout(function () {
+                if (typeof cb === 'function') cb(null);
+            }, 0);
+        },
+
+        // API: register hook for card rendering
+        onCardRender: function (cb) {
+            if (typeof cb !== 'function') return;
+            // Добавляем listener, который вызывается при событии 'render_card' (пример)
+            Lampa.Listener.follow && Lampa.Listener.follow('card.render', function (e) {
+                try { cb(e.data); } catch (err) { logError(err); }
+            });
+        },
+
+        // init entry
+        init: function () {
+            try {
+                log('['+PLUGIN_NAME+'] init v' + VERSION);
+                // Применяем дефолтные настройки (пример)
+                var defaults = {
+                    enabled: safeGet('drx_supermenu_enabled', true),
+                    showKP: safeGet('drx_supermenu_show_kp', true)
+                };
+                // Синхронизировать с Lampa.SettingsApi если нужно
+                if (Lampa.SettingsApi && typeof Lampa.SettingsApi.register === 'function') {
+                    try {
+                        Lampa.SettingsApi.register({
+                            id: 'drxaos_supermenu',
+                            name: Lampa.Lang.get ? Lampa.Lang.get('drxaos_supermenu') || 'DRXAOS SuperMenu' : 'DRXAOS SuperMenu',
+                            options: [
+                                { id: 'enabled', type: 'toggle', title: 'Enabled', default: defaults.enabled },
+                                { id: 'showKP', type: 'toggle', title: 'Show KP', default: defaults.showKP }
+                            ],
+                            onChange: function (opts) {
+                                safeSet('drx_supermenu_enabled', opts.enabled);
+                                safeSet('drx_supermenu_show_kp', opts.showKP);
+                                // apply changes
+                                DrxSuperMenu.applySettings && DrxSuperMenu.applySettings();
+                            }
+                        });
+                    } catch(e) { logWarn('SettingsApi register failed', e); }
+                }
+
+                // Применение настроек
+                DrxSuperMenu.applySettings();
+
+                // Пример: добавить слушатель на создание строки карточек (как в DRXAOS)
+                if (Lampa.Listener && Lampa.Listener.follow) {
+                    Lampa.Listener.follow('line', function (event) {
+                        try {
+                            if (event.type == 'create') {
+                                // TODO: добавить работу с карточками (decorate items)
+                                // Пример: найти карточки и добавить бейдж KP/качества
+                                // window.DrxSuperMenu.getKpRating(...) ...
+                            }
+                        } catch (e) {
+                            logError(e);
+                        }
+                    });
+                }
+
+            } catch (e) {
+                logError('['+PLUGIN_NAME+'] init error', e);
+            }
+        },
+
+        applySettings: function () {
+            try {
+                // Применяем UI-правки в зависимости от настроек
+                var enabled = safeGet('drx_supermenu_enabled', true);
+                if (!enabled) {
+                    document.body.classList.remove('drx-supermenu-enabled');
+                } else {
+                    document.body.classList.add('drx-supermenu-enabled');
+                }
+                // Дополнительные настройки
+            } catch (e) { logWarn(e); }
+        },
+
+        // debug helper
+        _debugDump: function () {
+            return {
+                storageSample: safeGet('drx_supermenu_enabled', null),
+                qualityCache: DrxSuperMenu.getQualityFromCache('sample')
+            };
+        }
+    };
+
+    // Экспорт
+    window.DrxSuperMenu = window.DrxSuperMenu || DrxSuperMenu;
+
+    // Плавная инициализация: ждать готовности Lampa.Storage/Lampa.Listener
+    (function whenReady(cb) {
+        if (window.Lampa && Lampa.Storage && Lampa.Listener) return cb();
+        setTimeout(function () { whenReady(cb); }, 200);
+    })(function () {
+        try {
+            DrxSuperMenu.init();
+            log('['+PLUGIN_NAME+'] initialized');
+        } catch (e) {
+            logError('['+PLUGIN_NAME+'] init exception', e);
+        }
+    });
+
+    // Конец IIFE
 })();
