@@ -1,547 +1,301 @@
 (function () {
-  'use strict';
+  "use strict";
 
   // ============================================================================
   // КОНФИГУРАЦИЯ
   // ============================================================================
+
   var SuperMenuConfig = {
-    pluginName: 'DrxSuperMenu',
-    version: '1.0.0',
-    
-    // Флаги отладки
-    debug: true,
-    verbose: false,
-    
-    // Производительность
-    performance: {
-      debounceDelay: 300,
-      throttleLimit: 100,
-      mutationThrottle: 50
+    DEBUG: true,
+    PERFORMANCE: { DEBOUNCE_DELAY: 300, THROTTLE_LIMIT: 100 },
+    PLATFORM: { isAndroid: typeof Lampa !== 'undefined' && Lampa.Platform.is('android') },
+    RATINGS: {
+      kpApiKey: 'твой_ключ_с_kinopoiskapiunofficial.tech', // ЗАМЕНИ НА СВОЙ КЛЮЧ
+      kpApiUrl: 'https://kinopoiskapiunofficial.tech/api/v2.2/films'
     },
-    
-    // Определение платформы
-    platform: {
-      android: /Android/i.test(navigator.userAgent),
-      webos: /webOS/i.test(navigator.userAgent),
-      tizen: /Tizen/i.test(navigator.userAgent),
-      browser: !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)),
-      tv: /Android TV|Google TV|WebOS|Tizen|Smart TV|TV|Fire TV|FireTV|AFT|Roku|Apple TV|Chromecast/i.test(navigator.userAgent)
-    },
-    
-    // Цветовые схемы для меток
-    colorSchemes: {
+    RATING_CACHE: { tmdb: {}, imdb: {}, kp: {} },
+    LABEL_COLORS: {
       vivid: {
-        '4K': '#FFD700',
-        'FHD': '#00CED1',
-        'HD': '#32CD32',
-        'SD': '#FF6347',
-        'CAM': '#DC143C',
-        'movie': '#4169E1',
-        'tv': '#9370DB'
+        TYPE: { movie: '#FFD54F', tv: '#4CAF50', anime: '#E91E63' },
+        QUALITY: { '4K': '#FF5722', '1080p': '#03A9F4', '720p': '#B0BEC5', SD: '#90A4AE', CAM: '#FF7043', HDR: '#FFC107' }
       },
       soft: {
-        '4K': '#F0E68C',
-        'FHD': '#B0E0E6',
-        'HD': '#90EE90',
-        'SD': '#FFA07A',
-        'CAM': '#CD5C5C',
-        'movie': '#6495ED',
-        'tv': '#9F7AEA'
+        TYPE: { movie: '#FFE082', tv: '#A5D6A7', anime: '#F48FB1' },
+        QUALITY: { '4K': '#FF9800', '1080p': '#81D4FA', '720p': '##C5E1A5', SD: '#BCAAA4', CAM: '#FFAB91', HDR: '#FFD54F' }
       }
     },
-    
-    // API параметры
-    api: {
-      kinopoisk: {
-        url: 'https://kinopoiskapiunofficial.tech/api/v2.2/films/',
-        key: '', // Будет загружен из Storage
-        enabled: true
-      },
-      tmdb: {
-        url: 'https://api.themoviedb.org/3/',
-        key: '', // Будет загружен из Storage
-        enabled: true
-      }
-    },
-    
-    // Кеш рейтингов (в памяти на время сессии)
-    cache: {
-      ratings: {},
-      tracking: {}
-    },
-    
-    // Включение функций
-    features: {
-      ratings: true,
-      tracking: true,
-      darkTheme: false,
-      colorLabels: true,
-      panelButton: true
+    LABEL_SCHEME: 'vivid',
+    VOICEOVER: { enabled: false, cache: {} },
+    FEATURES: {
+      madness: false, madness_level: 'normal', ratings_tmdb: true, ratings_imdb: true,
+      ratings_kp: false, label_colors: true, topbar_exit_menu: true,
+      borderless_dark_theme: false, voiceover_tracking: false
     }
   };
 
   // ============================================================================
-  // УТИЛИТЫ
+  // ЛОГИРОВАНИЕ
   // ============================================================================
-  
-  function log(message, data) {
-    if (SuperMenuConfig.debug) {
-      console.log('[' + SuperMenuConfig.pluginName + '] ' + message, data || '');
-    }
+
+  function log() { if (SuperMenuConfig.DEBUG) console.log.apply(console, ["[SuperMenu]"].concat(Array.prototype.slice.call(arguments))); }
+  function logError(msg, err) { console.error("[SuperMenu ERROR] " + msg, err || ""); }
+
+  // ============================================================================
+  // УТИЛИТЫ (fetch, debounce)
+  // ============================================================================
+
+  function fetchJsonWithTimeout(url, options, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var aborted = false;
+      var timeout = setTimeout(function () {
+        aborted = true;
+        reject(new Error("Timeout " + (timeoutMs || 8000) + "ms"));
+      }, timeoutMs || 8000);
+      fetch(url, options).then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      }).then(function (json) {
+        if (!aborted) resolve(json);
+      }).catch(function (err) {
+        if (!aborted) reject(err);
+      });
+    });
   }
 
-  function logError(message, error) {
-    console.error('[' + SuperMenuConfig.pluginName + '] ' + message, error || '');
-  }
-
-  function debounce(func, wait) {
+  var debounce = function (fn, delay) {
     var timeout;
     return function () {
-      var context = this, args = arguments;
+      var ctx = this, args = arguments;
       clearTimeout(timeout);
-      timeout = setTimeout(function () {
-        func.apply(context, args);
-      }, wait || SuperMenuConfig.performance.debounceDelay);
+      timeout = setTimeout(function () { fn.apply(ctx, args); }, delay || SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY);
     };
-  }
-
-  function throttle(func, limit) {
-    var inThrottle;
-    return function () {
-      var args = arguments;
-      var context = this;
-      if (!inThrottle) {
-        func.apply(context, args);
-        inThrottle = true;
-        setTimeout(function () {
-          inThrottle = false;
-        }, limit || SuperMenuConfig.performance.throttleLimit);
-      }
-    };
-  }
-
-  // ============================================================================
-  // РАСКРАСКА КАРТОЧЕК
-  // ============================================================================
-  
-  function applyCardColoring(cardElement) {
-    try {
-      if (!cardElement) return;
-      
-      var scheme = Lampa.Storage.get('drxsupermenu_colorscheme', 'vivid');
-      var colors = SuperMenuConfig.colorSchemes[scheme] || SuperMenuConfig.colorSchemes.vivid;
-      
-      // Качество
-      var qualityEl = cardElement.querySelector('.card__quality, .card-quality');
-      if (qualityEl) {
-        var qualityText = qualityEl.textContent.trim().toUpperCase();
-        if (colors[qualityText]) {
-          qualityEl.style.color = colors[qualityText];
-          qualityEl.style.fontWeight = '700';
-        }
-      }
-      
-      // Тип контента
-      var typeEl = cardElement.querySelector('.card__type, .card-type');
-      if (typeEl) {
-        var typeText = typeEl.textContent.trim().toLowerCase();
-        if (colors[typeText]) {
-          typeEl.style.color = colors[typeText];
-          typeEl.style.fontWeight = '700';
-        }
-      }
-      
-    } catch (e) {
-      logError('Error in applyCardColoring', e);
-    }
-  }
-
-  // ============================================================================
-  // РЕЙТИНГИ КИНОПОИСКА
-  // ============================================================================
-  
-  function fetchKinopoiskRating(kinopoiskId, callback) {
-    try {
-      if (!SuperMenuConfig.features.ratings) {
-        return callback(null);
-      }
-      
-      if (!kinopoiskId) {
-        return callback(null);
-      }
-      
-      // Проверка кеша
-      if (SuperMenuConfig.cache.ratings[kinopoiskId]) {
-        return callback(SuperMenuConfig.cache.ratings[kinopoiskId]);
-      }
-      
-      var apiKey = Lampa.Storage.get('kinopoisk_api_key', '');
-      if (!apiKey) {
-        log('KinoPoisk API key not found');
-        return callback(null);
-      }
-      
-      var url = SuperMenuConfig.api.kinopoisk.url + kinopoiskId;
-      
-      var network = new Lampa.Reguest();
-      network.native(url, function (data) {
-        try {
-          var rating = data.ratingKinopoisk || data.rating || null;
-          SuperMenuConfig.cache.ratings[kinopoiskId] = rating;
-          callback(rating);
-        } catch (e) {
-          logError('Error parsing KP rating', e);
-          callback(null);
-        }
-      }, function (error) {
-        logError('Error fetching KP rating', error);
-        callback(null);
-      }, false, {
-        headers: {
-          'X-API-KEY': apiKey
-        }
-      });
-      
-    } catch (e) {
-      logError('Error in fetchKinopoiskRating', e);
-      callback(null);
-    }
-  }
-
-  // ============================================================================
-  // ТРЕКИНГ ОЗВУЧЕК
-  // ============================================================================
-  
-  function saveTrackingInfo(itemId, data) {
-    try {
-      if (!SuperMenuConfig.features.tracking) return;
-      
-      SuperMenuConfig.cache.tracking[itemId] = {
-        voice: data.voice || '',
-        season: data.season || 1,
-        episode: data.episode || 1,
-        timestamp: Date.now()
-      };
-      
-      // Сохранение в Storage
-      Lampa.Storage.set('drxsupermenu_tracking', SuperMenuConfig.cache.tracking);
-      
-    } catch (e) {
-      logError('Error in saveTrackingInfo', e);
-    }
-  }
-
-  function getTrackingInfo(itemId) {
-    try {
-      if (!SuperMenuConfig.features.tracking) return null;
-      
-      if (!SuperMenuConfig.cache.tracking[itemId]) {
-        var stored = Lampa.Storage.get('drxsupermenu_tracking', {});
-        SuperMenuConfig.cache.tracking = stored;
-      }
-      
-      return SuperMenuConfig.cache.tracking[itemId] || null;
-      
-    } catch (e) {
-      logError('Error in getTrackingInfo', e);
-      return null;
-    }
-  }
-
-  // ============================================================================
-  // ТЕМА БЕЗ РАМОК
-  // ============================================================================
-  
-  function applyDarkTheme(enable) {
-    try {
-      var styleId = 'drxsupermenu-dark-theme';
-      var existingStyle = document.getElementById(styleId);
-      
-      if (enable) {
-        if (existingStyle) return;
-        
-        var css = `
-          .card {
-            border: none !important;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
-          }
-          .card--focus, .card.focus {
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
-          }
-        `;
-        
-        var style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = css;
-        document.head.appendChild(style);
-        
-        log('Dark theme applied');
-        
-      } else {
-        if (existingStyle) {
-          existingStyle.remove();
-          log('Dark theme removed');
-        }
-      }
-      
-    } catch (e) {
-      logError('Error in applyDarkTheme', e);
-    }
-  }
-
-  // ============================================================================
-  // КНОПКА В ПАНЕЛИ
-  // ============================================================================
-  
-  function addPanelButton() {
-    try {
-      if (!SuperMenuConfig.features.panelButton) return;
-      if (!Lampa.Panel) return;
-      
-      var buttonHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/></svg>';
-      
-      Lampa.Panel.add({
-        name: 'drxsupermenu',
-        html: buttonHTML,
-        position: 'right',
-        onClick: function () {
-          Lampa.Noty.show('DrxSuperMenu активен!');
-        }
-      });
-      
-      log('Panel button added');
-      
-    } catch (e) {
-      logError('Error in addPanelButton', e);
-    }
-  }
-
-  // ============================================================================
-  // НАСТРОЙКИ
-  // ============================================================================
-  
-  function addSettings() {
-    try {
-      if (!Lampa.SettingsApi) return;
-      
-      Lampa.SettingsApi.addComponent({
-        component: 'drxsupermenu',
-        name: 'DrxSuperMenu',
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/></svg>'
-      });
-      
-      // Цветовая схема
-      Lampa.SettingsApi.addParam({
-        component: 'drxsupermenu',
-        param: {
-          name: 'drxsupermenu_colorscheme',
-          type: 'select',
-          values: {
-            'vivid': 'Яркая',
-            'soft': 'Мягкая'
-          },
-          default: 'vivid'
-        },
-        field: {
-          name: 'Цветовая схема',
-          description: 'Выберите схему окраски меток качества'
-        },
-        onChange: function () {
-          applyAllSettings();
-        }
-      });
-      
-      // Рейтинги
-      Lampa.SettingsApi.addParam({
-        component: 'drxsupermenu',
-        param: {
-          name: 'drxsupermenu_ratings',
-          type: 'trigger',
-          default: true
-        },
-        field: {
-          name: 'Показывать рейтинги',
-          description: 'Получать рейтинги КиноПоиска'
-        },
-        onChange: function (value) {
-          SuperMenuConfig.features.ratings = value;
-        }
-      });
-      
-      // Трекинг
-      Lampa.SettingsApi.addParam({
-        component: 'drxsupermenu',
-        param: {
-          name: 'drxsupermenu_tracking',
-          type: 'trigger',
-          default: true
-        },
-        field: {
-          name: 'Трекинг озвучек',
-          description: 'Отслеживать просмотренные серии и озвучки'
-        },
-        onChange: function (value) {
-          SuperMenuConfig.features.tracking = value;
-        }
-      });
-      
-      // Тёмная тема
-      Lampa.SettingsApi.addParam({
-        component: 'drxsupermenu',
-        param: {
-          name: 'drxsupermenu_darktheme',
-          type: 'trigger',
-          default: false
-        },
-        field: {
-          name: 'Тема без рамок',
-          description: 'Убрать рамки у карточек'
-        },
-        onChange: function (value) {
-          SuperMenuConfig.features.darkTheme = value;
-          applyDarkTheme(value);
-        }
-      });
-      
-      log('Settings added');
-      
-    } catch (e) {
-      logError('Error in addSettings', e);
-    }
-  }
-
-  // ============================================================================
-  // ПРИМЕНЕНИЕ ВСЕХ НАСТРОЕК
-  // ============================================================================
-  
-  function applyAllSettings() {
-    try {
-      // Загрузка настроек
-      SuperMenuConfig.features.ratings = Lampa.Storage.get('drxsupermenu_ratings', true);
-      SuperMenuConfig.features.tracking = Lampa.Storage.get('drxsupermenu_tracking', true);
-      SuperMenuConfig.features.darkTheme = Lampa.Storage.get('drxsupermenu_darktheme', false);
-      
-      applyDarkTheme(SuperMenuConfig.features.darkTheme);
-      
-      // Применение окраски ко всем карточкам
-      var cards = document.querySelectorAll('.card');
-      cards.forEach(function (card) {
-        applyCardColoring(card);
-      });
-      
-      log('All settings applied');
-      
-    } catch (e) {
-      logError('Error in applyAllSettings', e);
-    }
-  }
-
-  // ============================================================================
-  // НАБЛЮДАТЕЛЬ ЗА DOM
-  // ============================================================================
-  
-  function initMutationObserver() {
-    try {
-      var observer = new MutationObserver(throttle(function (mutations) {
-        mutations.forEach(function (mutation) {
-          if (mutation.addedNodes && mutation.addedNodes.length) {
-            mutation.addedNodes.forEach(function (node) {
-              if (node.nodeType === 1) {
-                if (node.classList && node.classList.contains('card')) {
-                  applyCardColoring(node);
-                }
-                var cards = node.querySelectorAll('.card');
-                if (cards.length) {
-                  cards.forEach(function (card) {
-                    applyCardColoring(card);
-                  });
-                }
-              }
-            });
-          }
-        });
-      }, SuperMenuConfig.performance.mutationThrottle));
-      
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
-      
-      log('MutationObserver initialized');
-      
-    } catch (e) {
-      logError('Error in initMutationObserver', e);
-    }
-  }
-
-  // ============================================================================
-  // ЭКСПОРТ API
-  // ============================================================================
-  
-  window.DrxSuperMenu = {
-    version: SuperMenuConfig.version,
-    applyCardColoring: applyCardColoring,
-    fetchKinopoiskRating: fetchKinopoiskRating,
-    saveTrackingInfo: saveTrackingInfo,
-    getTrackingInfo: getTrackingInfo,
-    applyDarkTheme: applyDarkTheme,
-    applyAllSettings: applyAllSettings,
-    config: SuperMenuConfig
   };
+
+  // ============================================================================
+  // РЕЙТИНГИ
+  // ============================================================================
+
+  function getRatingFromCache(source, key) { return SuperMenuConfig.RATING_CACHE[source][key] || null; }
+  function setRatingToCache(source, key, value) { SuperMenuConfig.RATING_CACHE[source][key] = value; }
+
+  function getKpRating(meta, cb) {
+    if (!SuperMenuConfig.FEATURES.ratings_kp) return cb && cb(null);
+    try {
+      var key = meta.kpId || meta.title;
+      var cached = getRatingFromCache("kp", key);
+      if (cached) return cb && cb(cached);
+      if (!SuperMenuConfig.RATINGS.kpApiKey) return cb && cb(null);
+      var url = SuperMenuConfig.RATINGS.kpApiUrl + "/search-by-keyword?keyword=" + encodeURIComponent(meta.title) + (meta.year ? "&yearFrom=" + meta.year + "&yearTo=" + meta.year : "");
+      fetchJsonWithTimeout(url, { headers: { "X-API-KEY": SuperMenuConfig.RATINGS.kpApiKey } })
+        .then(function (json) {
+          var film = (json && (json.items || json.films) && (json.items || json.films)[0]) || null;
+          if (!film) return cb && cb(null);
+          var value = Number(film.ratingKinopoisk || film.ratingImdb || film.rating || 0);
+          if (!isFinite(value)) return cb && cb(null);
+          var result = { source: "kp", value: value };
+          setRatingToCache("kp", key, result);
+          cb && cb(result);
+        })
+        .catch(function (err) {
+          logError("getKpRating fetch", err);
+          cb && cb(null);
+        });
+    } catch (e) {
+      logError("getKpRating", e);
+      cb && cb(null);
+    }
+  }
+
+  // ============================================================================
+  // UI-ФУНКЦИИ (тема, кнопка, метки, MADNESS)
+  // ============================================================================
+
+  var borderlessStyle = null;
+  function injectBorderlessTheme(enabled) {
+    if (!enabled) {
+      if (borderlessStyle) {
+        borderlessStyle.remove();
+        borderlessStyle = null;
+      }
+      return;
+    }
+    if (borderlessStyle) return;
+    try {
+      var css = ".card, .card--collection { border: none !important; box-shadow: 0 14px 40px rgba(0,0,0,0.75) !important; background: radial-gradient(circle at top, #1B1F27 0%, #0B0F16 55%, #05070A 100%) !important; } .card__title, .card__age, .card__tags { text-shadow: 0 0 4px rgba(0,0,0,0.9) !important; }";
+      borderlessStyle = document.createElement("style");
+      borderlessStyle.textContent = css;
+      document.head.appendChild(borderlessStyle);
+      log("Borderless theme injected");
+    } catch (e) { logError("injectBorderless", e); }
+  }
+
+  var topbarAdded = false;
+  function registerTopBar() {
+    if (!SuperMenuConfig.FEATURES.topbar_exit_menu || topbarAdded || !Lampa.Panel || typeof Lampa.Panel.add !== 'function') return;
+    try {
+      topbarAdded = true;
+      Lampa.Panel.add({
+        name: 'supermenu_exit', title: 'Меню',
+        icon: '<svg viewBox="0 0 24 24" fill="none"><path d="M14.5 9.5L9.5 14.5M9.5 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5"/><path d="M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z" stroke="currentColor" stroke-width="1.5"/></svg>',
+        onSelect: function () { Lampa.Noty.show("Меню SuperMenu"); } // Замени на exitMenuOpen, если есть
+      });
+      log("Topbar button added");
+    } catch (e) {
+      logError("registerTopBar", e);
+      topbarAdded = false;
+    }
+  }
+
+  function colorizeLabelsInContainer(container, meta) {
+    if (!SuperMenuConfig.FEATURES.label_colors || !container || !meta) return;
+    try {
+      var colors = SuperMenuConfig.LABEL_COLORS[SuperMenuConfig.LABEL_SCHEME] || SuperMenuConfig.LABEL_COLORS.vivid;
+      var typeEl = container.querySelector(".view--category, .card__type, .type-label, [data-type]");
+      var qualityEl = container.querySelector(".view--quality, .card__quality, .quality-label, [data-quality]");
+      if (typeEl && meta.type && colors.TYPE[meta.type]) typeEl.style.color = colors.TYPE[meta.type];
+      if (qualityEl && meta.quality) {
+        var q = meta.quality.toUpperCase();
+        var qKey = /2160|4k/i.test(q) ? "4K" : /1080/i.test(q) ? "1080p" : /720/i.test(q) ? "720p" : /cam/i.test(q) ? "CAM" : /hdr/i.test(q) ? "HDR" : "SD";
+        if (colors.QUALITY[qKey]) qualityEl.style.color = colors.QUALITY[qKey];
+      }
+    } catch (e) { logError("colorizeLabels", e); }
+  }
+  
+  function madnessDecorate(element) {
+    if (!SuperMenuConfig.FEATURES.madness || SuperMenuConfig.FEATURES.madness_level === "off" || !element) return;
+    try {
+      if (!element.dataset.original) element.dataset.original = element.textContent.trim();
+      var badge = '<span style="margin-left:0.35em;font-size:0.8em;opacity:0.8;">✦ MADNESS</span>';
+      element.innerHTML = '<span class="base">' + element.dataset.original + '</span>' + (SuperMenuConfig.FEATURES.madness_level !== "off" ? badge : "");
+      if (SuperMenuConfig.FEATURES.madness_level === "full") element.style.cssText = "letter-spacing:0.03em;text-shadow:0 0 6px rgba(0,0,0,0.85);";
+    } catch (e) { logError("madnessDecorate", e); }
+  }
+
+  // ============================================================================
+  // ХУКИ НА СОБЫТИЯ LAMPA
+  // ============================================================================
+
+  var hooksAdded = false;
+  function initHooks() {
+    if (hooksAdded) return;
+    hooksAdded = true;
+    try {
+      // Full-карточка
+      Lampa.Listener.follow('full', debounce(function (e) {
+        if (e.type !== 'complite') return;
+        var movie = e.data && (e.data.movie || e.data.card) || {};
+        var meta = { title: movie.title || "", year: parseInt(movie.year || ""), tmdbId: movie.id, kpId: movie.kinopoisk_id, type: movie.name ? 'tv' : 'movie', quality: movie.quality || "" };
+        var full = e.object.activity.render().find('.full-start, .full-info');
+        if (!full || !full[0]) return;
+        
+        colorizeLabelsInContainer(full[0], meta);
+        
+        if (SuperMenuConfig.FEATURES.ratings_tmdb || SuperMenuConfig.FEATURES.ratings_imdb || SuperMenuConfig.FEATURES.ratings_kp) {
+          var ratingsDiv = $('<div class="drx-ratings" style="display:flex;gap:0.5em;margin-top:0.5em;font-size:0.9em;opacity:0.9;"></div>');
+          if (SuperMenuConfig.FEATURES.ratings_tmdb && movie.vote_average) {
+            ratingsDiv.append($('<span style="color:#03A9F4;">TMDB: ' + movie.vote_average.toFixed(1) + '</span>'));
+            setRatingToCache("tmdb", meta.tmdbId, { value: movie.vote_average });
+          }
+          getKpRating(meta, function (res) { if (res && res.value) ratingsDiv.append($('<span style="color:#FF5722;">КП: ' + res.value.toFixed(1) + '</span>')); });
+          var insertPoint = full.find('.full-info__text, .full-start__body');
+          if (insertPoint.length) insertPoint.append(ratingsDiv); else full.append(ratingsDiv);
+        }
+      }, 100));
+
+      // Заголовки (для MADNESS)
+      Lampa.Controller.listener.follow("toggle", function () {
+        var titleEl = document.querySelector(".head__title, .simple-title, .section__title");
+        if (titleEl) madnessDecorate(titleEl);
+      });
+      
+      log("Hooks added (full, toggle)");
+    } catch (e) { logError("initHooks", e); }
+  }
+
+  // ============================================================================
+  // СИНХРОНИЗАЦИЯ И ОБРАБОТКА НАСТРОЕК
+  // ============================================================================
+
+  function applyUserSettings() {
+    if (typeof Lampa === 'undefined' || !Lampa.Storage) return;
+    try {
+      Object.keys(SuperMenuConfig.FEATURES).forEach(function (key) {
+        SuperMenuConfig.FEATURES[key] = Lampa.Storage.get('supermenu_' + key, SuperMenuConfig.FEATURES[key] + '') === 'true';
+      });
+      SuperMenuConfig.LABEL_SCHEME = Lampa.Storage.get('supermenu_label_scheme', SuperMenuConfig.LABEL_SCHEME);
+      log('Config synced from Storage');
+    } catch (err) { logError('applyUserSettings', err); }
+  }
+
+  function onSettingsChanged(e) {
+    if (!e || !e.name || !e.name.startsWith('supermenu_')) return;
+    log('Setting changed:', e.name, '→', e.value);
+    applyUserSettings();
+    
+    // Применяем
+    injectBorderlessTheme(SuperMenuConfig.FEATURES.borderless_dark_theme);
+    registerTopBar();
+    initHooks();
+  }
+
+  // ============================================================================
+  // РЕГИСТРАЦИЯ НАСТРОЕК
+  // ============================================================================
+
+  function addSettings() {
+    if (!Lampa || !Lampa.SettingsApi || Lampa.SettingsApi.__superMenuAdded) return;
+    Lampa.SettingsApi.__superMenuAdded = true;
+    
+    var defaults = { 'supermenu_madness': 'false', 'supermenu_ratings_tmdb': 'true', /* ... */ };
+    Object.keys(defaults).forEach(function(k) { if (Lampa.Storage.get(k) === undefined) Lampa.Storage.set(k, defaults[k]); });
+    
+    Lampa.SettingsApi.addComponent({ component: 'supermenu', name: 'SuperMenu', icon: '<svg>...</svg>' });
+
+    var params = [
+      { name: 'madness', type: 'trigger', def: false, title: 'MADNESS', desc: 'Эффекты' },
+      // ... и т.д. для всех 11 параметров
+    ];
+
+    params.forEach(function (p) {
+      try {
+        Lampa.SettingsApi.addParam({
+          component: 'supermenu',
+          param: { name: 'supermenu_' + p.name, type: p.type, default: p.def },
+          field: { name: p.title, description: p.desc },
+          onChange: function (v) { onSettingsChanged({ name: 'supermenu_' + p.name, value: v }); }
+        });
+      } catch (e) { logError('Param ' + p.name, e); }
+    });
+    log("Settings registered");
+  }
 
   // ============================================================================
   // ИНИЦИАЛИЗАЦИЯ
   // ============================================================================
-  
+
+  var inited = false;
   function start() {
-    try {
-      log('Starting plugin v' + SuperMenuConfig.version);
-      
-      addSettings();
-      addPanelButton();
-      applyAllSettings();
-      initMutationObserver();
-      
-      log('Plugin started successfully');
-      
-    } catch (e) {
-      logError('Error starting plugin', e);
+    if (inited) return;
+    inited = true;
+    log("Starting SuperMenu");
+    
+    setTimeout(addSettings, 200);
+    setTimeout(function () {
+      applyUserSettings();
+      initHooks();
+      onSettingsChanged({name: "supermenu_init"}); // Применяем всё сразу
+    }, 500);
+
+    if (Lampa.Storage && Lampa.Storage.listener) {
+      Lampa.Storage.listener.follow('change', onSettingsChanged);
     }
   }
 
-  // ============================================================================
-  // BOOTSTRAP - ОЖИДАНИЕ LAMPA API
-  // ============================================================================
-  
-  function bootstrap() {
-    var checkInterval = setInterval(function () {
-      try {
-        if (window.Lampa && Lampa.SettingsApi && Lampa.Panel && Lampa.Listener && Lampa.Storage) {
-          clearInterval(checkInterval);
-          log('Lampa API detected');
-          
-          if (window.appready === true) {
-            start();
-          } else {
-            Lampa.Listener.follow('app', function (e) {
-              if (e.type === 'ready') {
-                start();
-              }
-            });
-          }
-        }
-      } catch (e) {
-        logError('Error in bootstrap', e);
-      }
-    }, 100);
-    
-    // Таймаут безопасности
-    setTimeout(function () {
-      clearInterval(checkInterval);
-    }, 30000);
+  if (typeof Lampa !== 'undefined' && Lampa.Listener && Lampa.Listener.follow) {
+    Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') start(); });
+    if (window.appready) start();
+  } else {
+    document.addEventListener('DOMContentLoaded', start);
   }
-
-  // Запуск
-  bootstrap();
 
 })();
