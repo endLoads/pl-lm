@@ -6,6 +6,7 @@
   // ============================================================================
 
   function log() {
+    if (!SuperMenuConfig.DEBUG) return;
     try {
       console.log.apply(console, ["[SuperMenu]"].concat(Array.prototype.slice.call(arguments)));
     } catch (e) {}
@@ -24,41 +25,12 @@
   }
 
   // ============================================================================
-  // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-  // ============================================================================
-
-  function throttle(func, limit) {
-    var inThrottle;
-    return function() {
-      var args = arguments;
-      var context = this;
-      if (!inThrottle) {
-        func.apply(context, args);
-        inThrottle = true;
-        setTimeout(function() { inThrottle = false; }, limit);
-      }
-    };
-  }
-
-  function debounce(func, delay) {
-    var timeout;
-    return function() {
-      var context = this;
-      var args = arguments;
-      clearTimeout(timeout);
-      timeout = setTimeout(function() {
-        func.apply(context, args);
-      }, delay);
-    };
-  }
-
-  // ============================================================================
   // КОНФИГУРАЦИЯ
   // ============================================================================
 
   var SuperMenuConfig = {
     DEBUG: true,
-    VERBOSE_LOGGING: true,
+    VERBOSE_LOGGING: false,
     PERFORMANCE: {
       DEBOUNCE_DELAY: 300,
       THROTTLE_LIMIT: 100,
@@ -70,6 +42,11 @@
       isTizen: (typeof Lampa !== 'undefined' && Lampa.Platform) ? Lampa.Platform.is('tizen') : false,
       isBrowser: (typeof Lampa !== 'undefined' && Lampa.Platform) ? Lampa.Platform.is('browser') : false
     },
+    RATINGS: {
+      kpApiKey: '', // Замени на свой ключ с kinopoiskapiunofficial.tech
+      kpApiUrl: 'https://kinopoiskapiunofficial.tech/api/v2.2/films'
+    },
+    RATING_CACHE: { tmdb: {}, imdb: {}, kp: {} }, // Кэш на сессию
     LABEL_COLORS: {
       vivid: {
         TYPE: { movie: '#FFD54F', tv: '#4CAF50', anime: '#E91E63' },
@@ -81,6 +58,10 @@
       }
     },
     LABEL_SCHEME: 'vivid',
+    VOICEOVER: {
+      enabled: false,
+      cache: {} // { key: { voiceId, lastSeason, lastEpisode, title, updatedAt } }
+    },
     FEATURES: {
       madness: false,
       madness_level: 'normal',
@@ -94,1518 +75,696 @@
     }
   };
 
+  // Авто-адаптация perf для Android
+  if (SuperMenuConfig.PLATFORM.isAndroid) {
+    SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY = 500;
+    SuperMenuConfig.PERFORMANCE.THROTTLE_LIMIT = 150;
+    SuperMenuConfig.PERFORMANCE.MUTATION_THROTTLE = 80;
+  }
 
   // ============================================================================
-  // ВСЕ ФУНКЦИИ ИЗ ОРИГИНАЛЬНОГО ПЛАГИНА
+  // УТИЛИТЫ
   // ============================================================================
 
-// Профиль производительности для Android TV
-    if (SuperMenuConfig.PLATFORM.isAndroid) {
-      SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY = 500;
-      SuperMenuConfig.PERFORMANCE.THROTTLE_LIMIT = 150;
-      SuperMenuConfig.PERFORMANCE.MUTATION_THROTTLE = 80;
-    }
-
-    // === УТИЛИТЫ ===
-    function log() {
-      if (!SuperMenuConfig.DEBUG && !SuperMenuConfig.VERBOSE_LOGGING) return;
-      try {
-        console.log.apply(console, ["[SuperMenu]"].concat([].slice.call(arguments)));
-      } catch (e) {}
-    }
-
-    function debounce(fn, delay) {
-      var timeout;
-      return function () {
-        var ctx = this;
-        var args = arguments;
-        clearTimeout(timeout);
-        timeout = setTimeout(function () {
-          fn.apply(ctx, args);
-        }, delay);
-      };
-    }
-
-    function throttle(fn, limit) {
-      var inThrottle;
-      var lastArgs;
-      var lastCtx;
-      return function () {
-        lastCtx = this;
-        lastArgs = arguments;
-        if (!inThrottle) {
-          fn.apply(lastCtx, lastArgs);
-          inThrottle = true;
-          setTimeout(function () {
-            inThrottle = false;
-            if (lastArgs) {
-              fn.apply(lastCtx, lastArgs);
-              lastArgs = null;
-            }
-          }, limit);
-        }
-      };
-    }
-
-    // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ РЕЙТИНГОВ ===
-
-    function fetchJsonWithTimeout(url, options, timeoutMs) {
-      return new Promise(function (resolve, reject) {
-        var aborted = false;
-        var timeout = setTimeout(function () {
-          aborted = true;
-          reject(new Error("Timeout " + timeoutMs + "ms for " + url));
-        }, timeoutMs || 8000);
-
-        fetch(url, options || {})
-          .then(function (res) {
-            if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
-            return res.json();
-          })
-          .then(function (json) {
-            if (!aborted) {
-              clearTimeout(timeout);
-              resolve(json);
-            }
-          })
-          .catch(function (err) {
-            if (!aborted) {
-              clearTimeout(timeout);
-              reject(err);
-            }
-          });
-      });
-    }
-
-    function getRatingFromCache(source, key) {
-      var cache = SuperMenuConfig.RATING_CACHE[source];
-      if (!cache) return null;
-      return cache[key] || null;
-    }
-
-    function setRatingToCache(source, key, value) {
-      var cache = SuperMenuConfig.RATING_CACHE[source];
-      if (!cache) return;
-      cache[key] = value;
-    }
-
-    function getTmdbRating(meta, cb) {
-      if (!SuperMenuConfig.FEATURES.ratings_tmdb) {
-        cb && cb(null);
-        return;
-      }
-
-      try {
-        var key = meta.tmdbId || meta.id || meta.title + "_" + (meta.year || "");
-        var cached = getRatingFromCache("tmdb", key);
-        if (cached) {
-          cb && cb(cached);
-          return;
-        }
-
-        cb && cb(null);
-      } catch (e) {
-        log("getTmdbRating error:", e);
-        cb && cb(null);
-      }
-    }
-
-    function getImdbRating(meta, cb) {
-      if (!SuperMenuConfig.FEATURES.ratings_imdb) {
-        cb && cb(null);
-        return;
-      }
-
-      try {
-        var key = meta.imdbId || meta.id || meta.title + "_" + (meta.year || "");
-        var cached = getRatingFromCache("imdb", key);
-        if (cached) {
-          cb && cb(cached);
-          return;
-        }
-
-        cb && cb(null);
-      } catch (e) {
-        log("getImdbRating error:", e);
-        cb && cb(null);
-      }
-    }
-
-    function getKpRating(meta, cb) {
-      if (!SuperMenuConfig.FEATURES.ratings_kp) {
-        cb && cb(null);
-        return;
-      }
-
-      try {
-        var key = meta.kpId || meta.id || meta.title + "_" + (meta.year || "");
-        var cached = getRatingFromCache("kp", key);
-        if (cached) {
-          cb && cb(cached);
-          return;
-        }
-
-        if (!SuperMenuConfig.RATINGS.kpApiKey || !SuperMenuConfig.RATINGS.kpApiUrl) {
-          cb && cb(null);
-          return;
-        }
-
-        var url =
-          SuperMenuConfig.RATINGS.kpApiUrl +
-          "?keyword=" +
-          encodeURIComponent(meta.title) +
-          (meta.year ? "&yearFrom=" + meta.year + "&yearTo=" + meta.year : "");
-
-        fetchJsonWithTimeout(
-          url,
-          {
-            headers: {
-              "X-API-KEY": SuperMenuConfig.RATINGS.kpApiKey
-            }
-          },
-          8000
-        )
-          .then(function (json) {
-            var film = null;
-
-            if (json && Array.isArray(json.items) && json.items.length) {
-              film = json.items[0];
-            } else if (json && Array.isArray(json.films) && json.films.length) {
-              film = json.films[0];
-            }
-
-            if (!film) {
-              cb && cb(null);
-              return;
-            }
-
-            var value = Number(
-              film.ratingImdb || film.ratingKinopoisk || film.rating
-            );
-            var votes = Number(
-              film.ratingImdbVoteCount ||
-                film.ratingKinopoiskVoteCount ||
-                film.votes
-            );
-
-            if (!isFinite(value)) {
-              cb && cb(null);
-              return;
-            }
-
-            var result = {
-              source: "kp",
-              value: value,
-              votes: isFinite(votes) ? votes : undefined
-            };
-            setRatingToCache("kp", key, result);
-            cb && cb(result);
-          })
-          .catch(function (err) {
-            log("getKpRating fetch error:", err);
-            cb && cb(null);
-          });
-      } catch (e) {
-        log("getKpRating error:", e);
-        cb && cb(null);
-      }
-    }
-
-    // === МЕНЮ ВЫХОДА (адаптация menus.js) ===
-
-    var ExitMenuConfig = {
-      visibilityValues: { 1: "Скрыть", 2: "Отобразить" },
-      items: [
-        { name: "exit", defaultValue: "2", title: "Закрыть приложение" },
-        { name: "reboot", defaultValue: "2", title: "Перезагрузить" },
-        { name: "switch_server", defaultValue: "2", title: "Сменить сервер" },
-        { name: "clear_cache", defaultValue: "2", title: "Очистить кэш" },
-        { name: "youtube", defaultValue: "1", title: "YouTube" },
-        { name: "rutube", defaultValue: "1", title: "RuTube" },
-        { name: "drm_play", defaultValue: "1", title: "DRM Play" },
-        { name: "twitch", defaultValue: "1", title: "Twitch" },
-        { name: "fork_player", defaultValue: "1", title: "ForkPlayer" },
-        { name: "speedtest", defaultValue: "1", title: "Speed Test" }
-      ]
+  function debounce(fn, delay) {
+    var timeout;
+    return function () {
+      var ctx = this;
+      var args = arguments;
+      clearTimeout(timeout);
+      timeout = setTimeout(function () {
+        fn.apply(ctx, args);
+      }, delay || SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY);
     };
+  }
 
-    function exitMenuEnsureDefaults() {
-      try {
-        var defaults = {
-          back_plug: true,
-          exit: "2",
-          reboot: "2",
-          switch_server: "2",
-          clear_cache: "2",
-          youtube: "1",
-          rutube: "1",
-          drm_play: "1",
-          twitch: "1",
-          fork_player: "1",
-          speedtest: "1"
-        };
+  function throttle(fn, limit) {
+    var inThrottle;
+    return function () {
+      var ctx = this;
+      var args = arguments;
+      if (!inThrottle) {
+        fn.apply(ctx, args);
+        inThrottle = true;
+        setTimeout(function () { inThrottle = false; }, limit || SuperMenuConfig.PERFORMANCE.THROTTLE_LIMIT);
+      }
+    };
+  }
 
-        Object.keys(defaults).forEach(function (key) {
-          if (!localStorage.getItem(key)) {
-            localStorage.setItem(key, defaults[key]);
+  function fetchJsonWithTimeout(url, options, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var aborted = false;
+      var timeout = setTimeout(function () {
+        aborted = true;
+        reject(new Error("Timeout " + (timeoutMs || 8000) + "ms for " + url));
+      }, timeoutMs || 8000);
+
+      fetch(url, options || {})
+        .then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
+          return res.json();
+        })
+        .then(function (json) {
+          if (!aborted) {
+            clearTimeout(timeout);
+            resolve(json);
+          }
+        })
+        .catch(function (err) {
+          if (!aborted) {
+            clearTimeout(timeout);
+            reject(err);
           }
         });
-      } catch (e) {
-        log("exitMenuEnsureDefaults error:", e);
-      }
-    }
+    });
+  }
 
-    function exitMenuSeason() {
-      try {
-        if (Lampa.Platform.is("apple_tv")) {
-          window.location.assign("exit://exit");
-        }
-        if (Lampa.Platform.is("tizen")) {
-          tizen.application.getCurrentApplication().exit();
-        }
-        if (Lampa.Platform.is("webos")) {
-          window.close();
-        }
-        if (Lampa.Platform.is("android")) {
-          Lampa.Android.exit();
-        }
-        if (Lampa.Platform.is("orsay")) {
-          Lampa.Orsay.exit();
-        }
-        if (Lampa.Platform.is("netcast")) {
-          window.NetCastBack();
-        }
-        if (Lampa.Platform.is("noname")) {
-          window.history.back();
-        }
-        if (Lampa.Platform.is("browser")) {
-          window.close();
-        }
-        if (Lampa.Platform.is("nw")) {
-          nw.Window.get().close();
-        }
-      } catch (e) {
-        log("exitMenuSeason error:", e);
-      }
-    }
+  // ============================================================================
+  // РЕЙТИНГИ
+  // ============================================================================
 
-    function exitMenuSpeedTest() {
-      try {
-        var wrapper = $(
-          '<div style="text-align:right;"><div style="min-height:360px;"><iframe id="speedtest-iframe" width="100%" height="100%" frameborder="0"></iframe></div></div>'
-        );
-        Lampa.Modal.open({
-          title: "",
-          html: wrapper,
-          size: "medium",
-          mask: true,
-          onBack: function () {
-            Lampa.Modal.close();
-            Lampa.Controller.toggle("content");
-          },
-          onSelect: function () {}
+  function getRatingFromCache(source, key) {
+    var cache = SuperMenuConfig.RATING_CACHE[source];
+    return cache && cache[key] ? cache[key] : null;
+  }
+
+  function setRatingToCache(source, key, value) {
+    SuperMenuConfig.RATING_CACHE[source][key] = value;
+  }
+
+  function getTmdbRating(meta, cb) {
+    if (!SuperMenuConfig.FEATURES.ratings_tmdb) {
+      cb && cb(null);
+      return;
+    }
+    try {
+      var key = meta.tmdbId || meta.id || meta.title + "_" + (meta.year || "");
+      var cached = getRatingFromCache("tmdb", key);
+      if (cached) {
+        cb && cb(cached);
+        return;
+      }
+      cb && cb(null);
+    } catch (e) {
+      logError("getTmdbRating", e);
+      cb && cb(null);
+    }
+  }
+
+  function getImdbRating(meta, cb) {
+    if (!SuperMenuConfig.FEATURES.ratings_imdb) {
+      cb && cb(null);
+      return;
+    }
+    try {
+      var key = meta.imdbId || meta.id || meta.title + "_" + (meta.year || "");
+      var cached = getRatingFromCache("imdb", key);
+      if (cached) {
+        cb && cb(cached);
+        return;
+      }
+      // TODO: API для IMDb (OmdbApi или аналог; пока из кэша/null)
+      cb && cb(null);
+    } catch (e) {
+      logError("getImdbRating", e);
+      cb && cb(null);
+    }
+  }
+
+  function getKpRating(meta, cb) {
+    if (!SuperMenuConfig.FEATURES.ratings_kp) {
+      cb && cb(null);
+      return;
+    }
+    try {
+      var key = meta.kpId || meta.id || meta.title + "_" + (meta.year || "");
+      var cached = getRatingFromCache("kp", key);
+      if (cached) {
+        cb && cb(cached);
+        return;
+      }
+      if (!SuperMenuConfig.RATINGS.kpApiKey) {
+        log("KP API key not set");
+        cb && cb(null);
+        return;
+      }
+      var url = SuperMenuConfig.RATINGS.kpApiUrl + "/search-by-keyword?keyword=" +
+                encodeURIComponent(meta.title) +
+                (meta.year ? "&yearFrom=" + meta.year + "&yearTo=" + meta.year : "");
+      fetchJsonWithTimeout(url, {
+        headers: { "X-API-KEY": SuperMenuConfig.RATINGS.kpApiKey }
+      }, 8000)
+        .then(function (json) {
+          var film = null;
+          if (json && Array.isArray(json.items) && json.items.length) {
+            film = json.items[0];
+          } else if (json && Array.isArray(json.films) && json.films.length) {
+            film = json.films[0];
+          }
+          if (!film) {
+            cb && cb(null);
+            return;
+          }
+          var value = Number(film.ratingKinopoisk || film.ratingImdb || film.rating || 0);
+          var votes = Number(film.ratingKinopoiskVoteCount || film.ratingImdbVoteCount || film.votes || 0);
+          if (!isFinite(value)) {
+            cb && cb(null);
+            return;
+          }
+          var result = { source: "kp", value: value, votes: isFinite(votes) ? votes : undefined };
+          setRatingToCache("kp", key, result);
+          cb && cb(result);
+        })
+        .catch(function (err) {
+          logError("getKpRating fetch", err);
+          cb && cb(null);
         });
-        var iframe = document.getElementById("speedtest-iframe");
-        if (iframe) iframe.src = "http://speedtest.vokino.tv/?R=3";
-      } catch (e) {
-        log("exitMenuSpeedTest error:", e);
-      }
+    } catch (e) {
+      logError("getKpRating", e);
+      cb && cb(null);
     }
+  }
 
-    function exitMenuClearCache() {
-      try {
-        Lampa.Storage.clear();
-        Lampa.Noty.show("Кэш Лампы очищен");
-      } catch (e) {
-        log("exitMenuClearCache error:", e);
+  // ============================================================================
+  // МЕНЮ ВЫХОДА (адаптировано из etalon menus)
+  // ============================================================================
+
+  var ExitMenuConfig = {
+    items: [
+      { name: "exit", default: "2", title: "Закрыть приложение" },
+      { name: "reboot", default: "2", title: "Перезагрузить" },
+      { name: "switch_server", default: "2", title: "Сменить сервер" },
+      { name: "clear_cache", default: "2", title: "Очистить кэш" },
+      { name: "youtube", default: "1", title: "YouTube" },
+      { name: "rutube", default: "1", title: "RuTube" },
+      { name: "drm_play", default: "1", title: "DRM Play" },
+      { name: "twitch", default: "1", title: "Twitch" },
+      { name: "fork_player", default: "1", title: "ForkPlayer" },
+      { name: "speedtest", default: "1", title: "Speed Test" }
+    ]
+  };
+
+  function exitMenuEnsureDefaults() {
+    ExitMenuConfig.items.forEach(function (item) {
+      if (!localStorage.getItem(item.name)) {
+        localStorage.setItem(item.name, item.default);
       }
-    }
+    });
+  }
 
-    function exitMenuSwitchServer() {
-      try {
+  function exitMenuAction(name) {
+    switch (name) {
+      case "exit":
+        if (Lampa.Platform.is("android")) Lampa.Android.exit();
+        else if (Lampa.Platform.is("tizen")) tizen.application.getCurrentApplication().exit();
+        else if (Lampa.Platform.is("webos")) window.close();
+        else if (Lampa.Platform.is("browser")) window.close();
+        else location.href = "exit://exit";
+        break;
+      case "reboot":
+        location.reload();
+        break;
+      case "switch_server":
         var proto = location.protocol === "https:" ? "https://" : "http://";
-        Lampa.Input.edit(
-          {
-            title: "Укажите cервер",
-            value: "",
-            free: true
-          },
-          function (value) {
-            if (value && value.trim() !== "") {
-              window.location.href = proto + value.trim();
-            }
-          }
-        );
-      } catch (e) {
-        log("exitMenuSwitchServer error:", e);
-      }
+        Lampa.Input.edit({ title: "Сервер", value: "", free: true }, function (value) {
+          if (value && value.trim()) window.location.href = proto + value.trim();
+        });
+        break;
+      case "clear_cache":
+        Lampa.Storage.clear();
+        Lampa.Noty.show("Кэш очищен");
+        break;
+      case "youtube":
+        window.location.href = "https://youtube.com/tv";
+        break;
+      case "rutube":
+        window.location.href = "https://rutube.ru/tv-release/rutube.server-22.0.0/webos/";
+        break;
+      case "drm_play":
+        window.location.href = "https://ott.drm-play.com";
+        break;
+      case "twitch":
+        window.location.href = "https://webos.tv.twitch.tv";
+        break;
+      case "fork_player":
+        window.location.href = "http://browser.appfxml.com";
+        break;
+      case "speedtest":
+        var wrapper = $('<div style="text-align:right;"><div style="min-height:360px;"><iframe id="speedtest-iframe" width="100%" height="100%" frameborder="0"></iframe></div></div>');
+        Lampa.Modal.open({
+          title: "", html: wrapper, size: "medium", mask: true,
+          onBack: function () { Lampa.Modal.close(); Lampa.Controller.toggle("content"); }
+        });
+        setTimeout(function () { $("#speedtest-iframe").attr("src", "http://speedtest.vokino.tv/?R=3"); }, 100);
+        break;
     }
+  }
 
-    function exitMenuOpenExternal(url) {
-      try {
-        window.location.href = url;
-      } catch (e) {
-        log("exitMenuOpenExternal error:", url, e);
+  function exitMenuOpen() {
+    try {
+      exitMenuEnsureDefaults();
+      var items = ExitMenuConfig.items
+        .filter(function (item) { return localStorage.getItem(item.name) !== "1"; })
+        .map(function (item) {
+          var icon = exitMenuIconHtml(item.name); // Функция иконок из etalon (упрощённо)
+          return { id: item.name, title: icon || item.title };
+        });
+      if (!items.length) {
+        Lampa.Noty.show("Все пункты скрыты");
+        return;
       }
+      Lampa.Select.show({
+        title: "Меню выхода",
+        items: items,
+        onBack: function () { Lampa.Controller.toggle("content"); },
+        onSelect: function (a) { exitMenuAction(a.id); }
+      });
+    } catch (e) {
+      logError("exitMenuOpen", e);
     }
+  }
 
-    // Иконки для пунктов меню выхода (адаптированы из menus.js)
-    function exitMenuIconHtml(id) {
-      switch (id) {
-        case "exit":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg width="256px" height="256px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-            '<g stroke-width="0"></g>' +
-            '<g stroke-linecap="round" stroke-linejoin="round"></g>' +
-            '<g>' +
-            '<path d="M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            '<path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            "</g></svg></div>" +
-            '<div style="font-size:1.3em">Закрыть приложение</div></div>'
-          );
-        case "reboot":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor">' +
-            '<g stroke-width="0"></g>' +
-            '<g stroke-linecap="round" stroke-linejoin="round"></g>' +
-            '<g>' +
-            '<g transform="rotate(-90 -504.181 526.181)">' +
-            '<path style="fill:currentColor;" d="M11 2a9 9 0 0 0-4.676 1.324l1.461 1.461A7 7 0 0 1 11 4a7 7 0 0 1 7 7 7 7 0 0 1-.787 3.213l1.465 1.465A9 9 0 0 0 20 11a9 9 0 0 0-9-9zM3.322 6.322A9 9 0 0 0 2 11a9 9 0 0 0 9 9 9 9 0 0 0 4.676-1.324l-1.461-1.461A7 7 0 0 1 11 18a7 7 0 0 1-7-7 7 7 0 0 1 .787-3.213z" transform="translate(0 1030.362)"></path>' +
-            '<path style="fill:currentColor;" d="m7 1034.362 3 3 1-1-3-3z"></path>' +
-            '<path style="fill:currentColor;" d="m11 1046.362 3 3 1-1-3-3z"></path>' +
-            "</g></g></svg></div>" +
-            '<div style="font-size:1.3em">Перезагрузить</div></div>'
-          );
-        case "switch_server":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg width="256px" height="256px" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
-            '<g stroke-width="0"></g>' +
-            '<g stroke-linecap="round" stroke-linejoin="round"></g>' +
-            '<g>' +
-            '<path d="M13 21.75C13.4142 21.75 13.75 21.4142 13.75 21C13.75 20.5858 13.4142 20.25 13 20.25V21.75ZM3.17157 19.8284L3.7019 19.2981H3.7019L3.17157 19.8284ZM20.8284 4.17157L20.2981 4.7019V4.7019L20.8284 4.17157ZM21.25 13C21.25 13.4142 21.5858 13.75 22 13.75C22.4142 13.75 22.75 13.4142 22.75 13H21.25ZM10 3.75H14V2.25H10V3.75Z" fill="currentColor"></path>' +
-            '<path d="M13.5 7.5L18 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            '<path d="M6 17.5L6 15.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            '<path d="M6 8.5L6 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            '<path d="M9 17.5L9 15.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            '<path d="M9 8.5L9 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            "</g></svg></div>" +
-            '<div style="font-size:1.3em">Сменить сервер</div></div>'
-          );
-        case "clear_cache":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">' +
-            '<path fill="currentColor" d="M26 20h-6v-2h6zm4 8h-6v-2h6zm-2-4h-6v-2h6z"/>' +
-            '<path fill="currentColor" d="M17.003 20a4.9 4.9 0 0 0-2.404-4.173L22 3l-1.73-1l-7.577 13.126a5.7 5.7 0 0 0-5.243 1.503C3.706 20.24 3.996 28.682 4.01 29.04a1 1 0 0 0 1 .96h14.991a1 1 0 0 0 .6-1.8c-3.54-2.656-3.598-8.146-3.598-8.2m-5.073-3.003A3.11 3.11 0 0 1 15.004 20c0 .038.002.208.017.469l-5.9-2.624a3.8 3.8 0 0 1 2.809-.848M15.45 28A5.2 5.2 0 0 1 14 25h-2a6.5 6.5 0 0 0 .968 3h-2.223A16.6 16.6 0 0 1 10 24H8a17.3 17.3 0 0 0 .665 4H6c.031-1.836.29-5.892 1.803-8.553l7.533 3.35A13 13 0 0 0 17.596 28Z"/>' +
-            "</svg></div>" +
-            '<div style="font-size:1.3em">Очистить кэш</div></div>'
-          );
-        case "youtube":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">' +
-            '<path fill="currentColor" d="M10 2.3C.172 2.3 0 3.174 0 10s.172 7.7 10 7.7s10-.874 10-7.7s-.172-7.7-10-7.7m3.205 8.034l-4.49 2.096c-.393.182-.715-.022-.715-.456V8.026c0-.433.322-.638.715-.456l4.49 2.096c.393.184.393.484 0 .668"/>' +
-            "</svg></div>" +
-            '<div style="font-size:1.3em">YouTube</div></div>'
-          );
-        case "rutube":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg width="256px" height="256px" viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg" fill="none">' +
-            '<g stroke-width="0"></g>' +
-            '<g stroke-linecap="round" stroke-linejoin="round"></g>' +
-            '<g>' +
-            '<path fill="#ffffff" d="M128.689 47.57H20.396v116.843h30.141V126.4h57.756l26.352 38.013h33.75l-29.058-38.188c9.025-1.401 15.522-4.73 19.493-9.985 3.97-5.255 5.956-13.664 5.956-24.875v-8.759c0-6.657-.721-11.912-1.985-15.941-1.264-4.029-3.43-7.533-6.498-10.686-3.249-2.978-6.858-5.08-11.19-6.481-4.332-1.226-9.747-1.927-16.424-1.927z" style="fill:none;stroke:#ffffff;stroke-width:12;stroke-linecap:round;stroke-linejoin:round" transform="translate(1.605 -1.99)"></path>' +
-            '<path fill="#ffffff" d="M162.324 45.568c5.52 0 9.998-4.477 9.998-10s-4.478-10-9.998-10c-5.524 0-10.002 4.477-10.002 10s4.478 10 10.002 10z" transform="translate(1.605 -1.99)"></path>' +
-            "</g></svg></div>" +
-            '<div style="font-size:1.3em">RuTube</div></div>'
-          );
-        case "drm_play":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg fill="#ffffff" width="256px" height="256px" viewBox="0 -6 46 46" xmlns="http://www.w3.org/2000/svg" stroke="#ffffff" stroke-width="2.3">' +
-            '<g stroke-width="0"></g>' +
-            '<g stroke-linecap="round" stroke-linejoin="round"></g>' +
-            '<g>' +
-            '<path d="M46,37H2a1,1,0,0,1-1-1V8A1,1,0,0,1,2,7H46a1,1,0,0,1,1,1V36A1,1,0,0,1,46,37ZM45,9H3V35H45ZM21,16a.975.975,0,0,1,.563.2l7.771,4.872a.974.974,0,0,1,.261,1.715l-7.974,4.981A.982.982,0,0,1,21,28a1,1,0,0,1-1-1V17A1,1,0,0,1,21,16ZM15,39H33a1,1,0,0,1,0,2H15a1,1,0,0,1,0-2Z" fill-rule="evenodd"></path>' +
-            "</g></svg></div>" +
-            '<div style="font-size:1.3em">DRM Play</div></div>'
-          );
-        case "twitch":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-            '<path fill="currentColor" d="M3.774 2L2.45 5.452v14.032h4.774V22h2.678l2.548-2.548h3.871l5.226-5.226V2zm15.968 11.323l-3 3h-4.743L9.452 18.87v-2.548H5.42V3.774h14.32zm-2.968-6.097v5.226h-1.775V7.226zm-4.775 0v5.226h-1.774V7.226z"/>' +
-            "</svg></div>" +
-            '<div style="font-size:1.3em">Twitch</div></div>'
-          );
-        case "fork_player":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg width="256px" height="256px" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="#ffffff" stroke="#000000" stroke-width="0.00032">' +
-            '<g stroke-width="0"></g>' +
-            '<g stroke-linecap="round" stroke-linejoin="round"></g>' +
-            '<g>' +
-            '<g fill="none" fill-rule="evenodd">' +
-            '<path d="m0 0h32v32h-32z"></path>' +
-            '<g fill="#ffffff" fill-rule="nonzero">' +
-            '<path d="m32 16c0-8.836-7.164-16-16-16S0 7.164 0 16s7.164 16 16 16s16-7.164 16-16zM1.455 16C1.455 7.967 7.967 1.455 16 1.455S30.545 7.967 30.545 16 24.033 30.545 16 30.545 1.455 24.033 1.455 16z"></path>' +
-            '<path d="M16.614 25.235v-9.235h3.047l.481-3.06h-3.529v-1.535c0-.799.262-1.56 1.408-1.56h2.291V6.79h-3.252c-2.735 0-3.481 1.801-3.481 4.297v1.852H11.3v3.062h1.876v9.235z"></path>' +
-            "</g></g></g></svg></div>" +
-            '<div style="font-size:1.3em">ForkPlayer</div></div>'
-          );
-        case "speedtest":
-          return (
-            '<div class="settings-folder" style="padding:0!important">' +
-            '<div style="width:2.2em;height:1.7em;padding-right:.5em">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
-            '<path fill="currentColor" d="M10.45 15.5q.625.625 1.575.588T13.4 15.4L19 7l-8.4 5.6q-.65.45-.712 1.362t.562 1.538M5.1 20q-.55 0-1.012-.238t-.738-.712q-.65-1.175-1-2.437T2 14q0-2.075.788-3.9t2.137-3.175T8.1 4.788T12 4q2.05 0 3.85.775T19 6.888t2.15 3.125t.825 3.837q.025 1.375-.312 2.688t-1.038 2.512q-.275.475-.737.713T18.874 20z"/>' +
-            "</svg></div>" +
-            '<div style="font-size:1.3em">Speed Test</div></div>'
-          );
-        default:
-          return id;
+  function exitMenuIconHtml(id) {
+    // Упрощённые SVG-иконки из etalon (только текст для краткости; добавь SVG если нужно)
+    var icons = {
+      exit: "🚪", reboot: "🔄", switch_server: "🌐", clear_cache: "🗑️",
+      youtube: "📺", rutube: "🎥", drm_play: "🎬", twitch: "📡",
+      fork_player: "🔀", speedtest: "⚡"
+    };
+    return icons[id] ? icons[id] + " " + ExitMenuConfig.items.find(i => i.name === id).title : id;
+  }
+
+  // ============================================================================
+  // ЦВЕТНЫЕ МЕТКИ
+  // ============================================================================
+
+  function getCurrentLabelColors() {
+    return SuperMenuConfig.LABEL_COLORS[SuperMenuConfig.LABEL_SCHEME] || SuperMenuConfig.LABEL_COLORS.vivid;
+  }
+
+  function colorizeLabelsInContainer(container, meta) {
+    if (!SuperMenuConfig.FEATURES.label_colors || !container || !meta) return;
+    try {
+      var colors = getCurrentLabelColors();
+      var typeEl = container.querySelector(".view--category, .card__type, .type-label") || container.querySelector("[data-type]");
+      var qualityEl = container.querySelector(".view--quality, .card__quality, .quality-label") || container.querySelector("[data-quality]");
+      if (typeEl && meta.type) {
+        var tColor = colors.TYPE[meta.type] || colors.TYPE.movie;
+        typeEl.style.color = tColor;
       }
+      if (qualityEl && meta.quality) {
+        var q = meta.quality.toUpperCase();
+        if (/2160|4k/i.test(q)) q = "4K";
+        else if (/1080/i.test(q)) q = "1080p";
+        else if (/720/i.test(q)) q = "720p";
+        else if (/cam/i.test(q)) q = "CAM";
+        else if (/hdr/i.test(q)) q = "HDR";
+        else q = "SD";
+        var qColor = colors.QUALITY[q];
+        if (qColor) qualityEl.style.color = qColor;
+      }
+    } catch (e) {
+      logError("colorizeLabels", e);
     }
+  }
 
-    function exitMenuBuildItems() {
-      var items = [];
+  // ============================================================================
+  // MADNESS РЕЖИМ
+  // ============================================================================
 
-      if (localStorage.getItem("exit") !== "1") {
-        items.push({ id: "exit", title: exitMenuIconHtml("exit") });
+  function madnessDecorateSectionTitle(element) {
+    if (!SuperMenuConfig.FEATURES.madness || SuperMenuConfig.FEATURES.madness_level === "off" || !element) return;
+    try {
+      if (!element.dataset.drxOriginal) element.dataset.drxOriginal = element.textContent.trim();
+      var original = element.dataset.drxOriginal;
+      element.innerHTML = '<span class="drx-base">' + original + '</span>';
+      if (SuperMenuConfig.FEATURES.madness_level !== "off") {
+        var badge = document.createElement("span");
+        badge.className = "drx-madness";
+        badge.textContent = " ✦ MADNESS";
+        badge.style.cssText = "margin-left:0.35em;font-size:0.8em;opacity:0.8;";
+        element.appendChild(badge);
       }
-      if (localStorage.getItem("reboot") !== "1") {
-        items.push({ id: "reboot", title: exitMenuIconHtml("reboot") });
+      if (SuperMenuConfig.FEATURES.madness_level === "full") {
+        element.style.cssText = "letter-spacing:0.03em;text-shadow:0 0 6px rgba(0,0,0,0.85);";
       }
-      if (localStorage.getItem("switch_server") !== "1") {
-        items.push({
-          id: "switch_server",
-          title: exitMenuIconHtml("switch_server")
+    } catch (e) {
+      logError("madnessDecorate", e);
+    }
+  }
+
+  var madnessHookAdded = false;
+  function initMadnessHooks() {
+    if (madnessHookAdded || !SuperMenuConfig.FEATURES.madness) return;
+    madnessHookAdded = true;
+    try {
+      if (Lampa.Controller && Lampa.Controller.listener && Lampa.Controller.listener.follow) {
+        Lampa.Controller.listener.follow("toggle", function () {
+          var titleEl = document.querySelector(".head__title, .simple-title, .section__title");
+          if (titleEl) madnessDecorateSectionTitle(titleEl);
         });
       }
-      if (localStorage.getItem("clear_cache") !== "1") {
-        items.push({
-          id: "clear_cache",
-          title: exitMenuIconHtml("clear_cache")
-        });
-      }
-      if (localStorage.getItem("youtube") !== "1") {
-        items.push({ id: "youtube", title: exitMenuIconHtml("youtube") });
-      }
-      if (localStorage.getItem("rutube") !== "1") {
-        items.push({ id: "rutube", title: exitMenuIconHtml("rutube") });
-      }
-      if (localStorage.getItem("drm_play") !== "1") {
-        items.push({ id: "drm_play", title: exitMenuIconHtml("drm_play") });
-      }
-      if (localStorage.getItem("twitch") !== "1") {
-        items.push({ id: "twitch", title: exitMenuIconHtml("twitch") });
-      }
-      if (localStorage.getItem("fork_player") !== "1") {
-        items.push({
-          id: "fork_player",
-          title: exitMenuIconHtml("fork_player")
-        });
-      }
-      if (localStorage.getItem("speedtest") !== "1") {
-        items.push({
-          id: "speedtest",
-          title: exitMenuIconHtml("speedtest")
-        });
-      }
-
-      return items;
+      log("Madness hooks added");
+    } catch (e) {
+      logError("initMadnessHooks", e);
     }
+  }
 
-    function exitMenuOpen() {
-      try {
-        exitMenuEnsureDefaults();
+  // ============================================================================
+  // ТЁМНАЯ ТЕМА БЕЗ РАМок
+  // ============================================================================
 
-        var items = exitMenuBuildItems();
-        if (!items.length) {
-          Lampa.Noty.show("Все пункты меню выхода скрыты в настройках");
-          return;
-        }
+  var borderlessStyle = null;
+  function injectBorderlessTheme(enabled) {
+    if (!enabled) {
+      if (borderlessStyle && borderlessStyle.parentNode) {
+        borderlessStyle.parentNode.removeChild(borderlessStyle);
+        borderlessStyle = null;
+      }
+      return;
+    }
+    if (borderlessStyle) return;
+    try {
+      var css = 
+        "body { background: #05070A !important; color: #ECEFF4 !important; }" +
+        ".card, .card--collection { border: none !important; box-shadow: 0 14px 40px rgba(0,0,0,0.75) !important; background: radial-gradient(circle at top, #1B1F27 0%, #0B0F16 55%, #05070A 100%) !important; }" +
+        ".card__title, .card__age, .card__tags { text-shadow: 0 0 4px rgba(0,0,0,0.9) !important; }" +
+        ".head__title, .section__title { background: transparent !important; color: #ECEFF4 !important; text-shadow: 0 0 8px rgba(0,0,0,0.9) !important; }";
+      borderlessStyle = document.createElement("style");
+      borderlessStyle.className = "drx-borderless";
+      borderlessStyle.appendChild(document.createTextNode(css));
+      document.head.appendChild(borderlessStyle);
+      log("Borderless theme injected");
+    } catch (e) {
+      logError("injectBorderless", e);
+    }
+  }
 
-        Lampa.Select.show({
-          title: "Меню выхода",
-          items: items,
-          onBack: function () {
-            Lampa.Controller.toggle("content");
-          },
-          onSelect: function (selected) {
-            switch (selected.id) {
-              case "exit":
-                exitMenuSeason();
-                break;
-              case "reboot":
-                location.reload();
-                break;
-              case "switch_server":
-                exitMenuSwitchServer();
-                break;
-              case "clear_cache":
-                exitMenuClearCache();
-                break;
-              case "youtube":
-                exitMenuOpenExternal("https://youtube.com/tv");
-                break;
-              case "rutube":
-                exitMenuOpenExternal(
-                  "https://rutube.ru/tv-release/rutube.server-22.0.0/webos/"
-                );
-                break;
-              case "drm_play":
-                exitMenuOpenExternal("https://ott.drm-play.com");
-                break;
-              case "twitch":
-                exitMenuOpenExternal("https://webos.tv.twitch.tv");
-                break;
-              case "fork_player":
-                exitMenuOpenExternal("http://browser.appfxml.com");
-                break;
-              case "speedtest":
-                exitMenuSpeedTest();
-                break;
-            }
+  // ============================================================================
+  // КНОПКА ТОП-БАР
+  // ============================================================================
+
+  var topbarAdded = false;
+  function registerTopBar() {
+    if (!SuperMenuConfig.FEATURES.topbar_exit_menu || topbarAdded || !Lampa.Panel || typeof Lampa.Panel.add !== 'function') return;
+    try {
+      topbarAdded = true;
+      Lampa.Panel.add({
+        name: 'supermenu_exit',
+        title: 'Меню выхода',
+        icon: '<svg viewBox="0 0 24 24" fill="none"><path d="M14.5 9.5L9.5 14.5M9.5 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5"/><path d="M22 12C22 16.714 20.536 20.536 16.714 20.536C12.892 20.536 9.171 20.536 5.357 20.536C1.543 20.536 -0.000999999 20.536 3.464 20.536" stroke="currentColor" stroke-width="1.5"/></svg>',
+        onSelect: exitMenuOpen
+      });
+      log("Topbar button added");
+    } catch (e) {
+      logError("registerTopBar", e);
+      topbarAdded = false;
+    }
+  }
+
+  // ============================================================================
+  // VOICEOVER ТРЕКИНГ (beta)
+  // ============================================================================
+
+  function getVoiceoverKey(meta) {
+    return meta.title + "_" + (meta.season || "") + "_" + (meta.episode || "");
+  }
+
+  function rememberVoiceover(meta) {
+    if (!SuperMenuConfig.VOICEOVER.enabled || !meta || !meta.voiceId) return;
+    try {
+      var key = getVoiceoverKey(meta);
+      SuperMenuConfig.VOICEOVER.cache[key] = {
+        voiceId: meta.voiceId,
+        lastSeason: meta.season || 0,
+        lastEpisode: meta.episode || 0,
+        title: meta.title || "",
+        updatedAt: Date.now()
+      };
+      // Сохраняем в localStorage для персистентности
+      localStorage.setItem("drx_voiceover_" + key, JSON.stringify(SuperMenuConfig.VOICEOVER.cache[key]));
+    } catch (e) {
+      logError("rememberVoiceover", e);
+    }
+  }
+
+  var voiceoverHookAdded = false;
+  function initVoiceoverHooks() {
+    if (voiceoverHookAdded || !SuperMenuConfig.VOICEOVER.enabled) return;
+    voiceoverHookAdded = true;
+    try {
+      // Хук на playlist (когда выбирают озвучку)
+      if (Lampa.Listener && Lampa.Listener.follow) {
+        Lampa.Listener.follow('playlist', function (e) {
+          if (e.type === 'select' && e.data && e.data.voiceover) {
+            rememberVoiceover({ title: e.data.title, season: e.data.season, episode: e.data.episode, voiceId: e.data.voiceover.id });
           }
         });
-      } catch (e) {
-        log("exitMenuOpen error:", e);
       }
-    }
-
-    // === ЦВЕТА МЕТОК ===
-
-    function getCurrentLabelColors() {
-      var scheme = SuperMenuConfig.LABEL_SCHEME;
-      var all = SuperMenuConfig.LABEL_COLORS || {};
-      return all[scheme] || all.vivid || { TYPE: {}, QUALITY: {} };
-    }
-
-    function colorizeLabelsInContainer(container, meta) {
-      try {
-        if (!SuperMenuConfig.FEATURES.label_colors) return;
-        if (!container || !meta) return;
-
-        var colors = getCurrentLabelColors();
-
-        var typeEl = container.querySelector(
-          ".drx-label-type, .card-type, .type-label"
-        );
-        var qualityEl = container.querySelector(
-          ".drx-label-quality, .card-quality, .quality-label"
-        );
-
-        if (typeEl && meta.type) {
-          var tColor = colors.TYPE[meta.type];
-          if (tColor) typeEl.style.color = tColor;
+      // Загрузка кэша из localStorage
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (key.startsWith("drx_voiceover_")) {
+          try {
+            SuperMenuConfig.VOICEOVER.cache[key.replace("drx_voiceover_", "")] = JSON.parse(localStorage.getItem(key));
+          } catch (e) {}
         }
-
-        if (qualityEl && meta.quality) {
-          var q = meta.quality;
-          if (/2160|4k/i.test(q)) q = "4K";
-          else if (/1080/i.test(q)) q = "1080p";
-          else if (/720/i.test(q)) q = "720p";
-          else if (/cam/i.test(q)) q = "CAM";
-          else if (/hdr/i.test(q)) q = "HDR";
-          else if (/sd/i.test(q)) q = "SD";
-
-          var qColor = colors.QUALITY[q];
-          if (qColor) qualityEl.style.color = qColor;
-        }
-      } catch (e) {
-        log("colorizeLabelsInContainer error:", e);
       }
+      log("Voiceover hooks added");
+    } catch (e) {
+      logError("initVoiceoverHooks", e);
     }
+  }
 
-    // === MADNESS: заголовки разделов ===
+  // ============================================================================
+  // ХУКИ НА КАРТОЧКИ (full event)
+  // ============================================================================
 
-    function madnessDecorateSectionTitle(element) {
-      try {
-        if (!SuperMenuConfig.FEATURES.madness) return;
-        if (SuperMenuConfig.FEATURES.madness_level === "off") return;
-        if (!element) return;
+  try {
+    if (Lampa && Lampa.Listener && Lampa.Listener.follow) {
+      Lampa.Listener.follow('full', debounce(function (e) {
+        if (e.type !== 'complite') return;
+        var movie = e.data && (e.data.movie || e.data.card || e.data.item) || {};
+        var meta = {
+          title: movie.title || "",
+          year: parseInt(movie.year || movie.release_date || ""),
+          tmdbId: movie.id,
+          imdbId: movie.imdb_id,
+          kpId: movie.kinopoisk_id,
+          type: movie.name ? 'tv' : 'movie',
+          quality: movie.quality || ""
+        };
+        var full = e.object && e.object.activity && e.object.activity.render && e.object.activity.render().find('.full-start, .full-info');
+        if (!full || !full[0]) return;
 
-        if (!element.dataset.drxOriginalTitle) {
-          element.dataset.drxOriginalTitle = element.textContent || "";
-        }
+        // Метки
+        colorizeLabelsInContainer(full[0], meta);
 
-        var original = element.dataset.drxOriginalTitle || "";
-        var level = SuperMenuConfig.FEATURES.madness_level;
+        // Рейтинги
+        if (SuperMenuConfig.FEATURES.ratings_tmdb || SuperMenuConfig.FEATURES.ratings_imdb || SuperMenuConfig.FEATURES.ratings_kp) {
+          var ratingsDiv = document.createElement('div');
+          ratingsDiv.className = 'drx-ratings';
+          ratingsDiv.style.cssText = 'display:flex;gap:0.5em;margin-top:0.5em;font-size:0.9em;opacity:0.9;';
 
-        element.innerHTML = "";
-        var baseSpan = document.createElement("span");
-        baseSpan.className = "drx-section-title-base";
-        baseSpan.textContent = original;
+          // TMDB
+          if (SuperMenuConfig.FEATURES.ratings_tmdb && typeof movie.vote_average !== 'undefined') {
+            var tmdbSpan = document.createElement('span');
+            tmdbSpan.textContent = 'TMDB: ' + (movie.vote_average || 0).toFixed(1);
+            tmdbSpan.style.color = '#03A9F4';
+            ratingsDiv.appendChild(tmdbSpan);
+            setRatingToCache("tmdb", meta.tmdbId, { source: "tmdb", value: movie.vote_average });
+          }
 
-        element.appendChild(baseSpan);
-
-        if (level === "normal" || level === "full") {
-          var badge = document.createElement("span");
-          badge.className = "drx-section-title-madness";
-          badge.textContent = " ✦ MADNESS";
-          badge.style.marginLeft = "0.35em";
-          badge.style.fontSize = "0.8em";
-          badge.style.opacity = "0.8";
-          element.appendChild(badge);
-        }
-
-        if (level === "full") {
-          element.style.letterSpacing = "0.03em";
-          element.style.textShadow = "0 0 6px rgba(0,0,0,0.85)";
-        } else {
-          element.style.letterSpacing = "";
-          element.style.textShadow = "";
-        }
-      } catch (e) {
-        log("madnessDecorateSectionTitle error:", e);
-      }
-    }
-
-    function initMadnessSectionHooks() {
-      try {
-        if (!SuperMenuConfig.FEATURES.madness) return;
-
-        if (
-          Lampa.Controller &&
-          Lampa.Controller.listener &&
-          Lampa.Controller.listener.follow
-        ) {
-          Lampa.Controller.listener.follow("toggle", function () {
-            try {
-              var titleEl = document.querySelector(
-                ".head .head__title, .simple-title, .section__title"
-              );
-              if (!titleEl) return;
-              madnessDecorateSectionTitle(titleEl);
-            } catch (e) {
-              log("Madness toggle hook error:", e);
+          // IMDb (асинх)
+          getImdbRating(meta, function (res) {
+            if (res && res.value) {
+              var imdbSpan = document.createElement('span');
+              imdbSpan.textContent = 'IMDb: ' + res.value.toFixed(1);
+              imdbSpan.style.color = '#FFD700';
+              ratingsDiv.appendChild(imdbSpan);
             }
           });
+
+          // KP (асинх)
+          getKpRating(meta, function (res) {
+            if (res && res.value) {
+              var kpSpan = document.createElement('span');
+              kpSpan.textContent = 'КП: ' + res.value.toFixed(1);
+              kpSpan.style.color = '#FF5722';
+              ratingsDiv.appendChild(kpSpan);
+            }
+          });
+
+          // Вставка
+          var insert = full.find('.full-info__text, .full-start__body');
+          if (insert && insert[0]) insert[0].appendChild(ratingsDiv);
+          else full.append(ratingsDiv);
         }
-      } catch (e) {
-        log("initMadnessSectionHooks error:", e);
-      }
+      }, 100));
+      log("Full hooks added");
     }
-
-    // === ТЁМНАЯ ТЕМА БЕЗ РАМок ===
-
-    var injectedBorderlessStyle = null;
-
-    function injectBorderlessDarkTheme() {
-      try {
-        if (!SuperMenuConfig.FEATURES.borderless_dark_theme) {
-          if (
-            injectedBorderlessStyle &&
-            injectedBorderlessStyle.parentNode
-          ) {
-            injectedBorderlessStyle.parentNode.removeChild(
-              injectedBorderlessStyle
-            );
-            injectedBorderlessStyle = null;
-          }
-          return;
-        }
-
-        if (injectedBorderlessStyle) return;
-
-        var css =
-          "body { background-color: #05070A !important; color: #ECEFF4 !important; }" +
-          ".card, .card--collection, .card-w { " +
-          "  border:none!important;" +
-          "  box-shadow:0 14px 40px rgba(0,0,0,0.75)!important;" +
-          "  background:radial-gradient(circle at top,#1B1F27 0,#0B0F16 55%,#05070A 100%)!important;" +
-          "}" +
-          ".card__view, .card__title, .card__age, .card__tags { " +
-          "  text-shadow:0 0 4px rgba(0,0,0,0.9)!important;" +
-          "}" +
-          ".drx-kp-badge, .cardvote { " +
-          "  text-shadow:0 0 4px rgba(0,0,0,0.95)!important;" +
-          "}" +
-          ".head, .head__title, .simple-title, .section__title { " +
-          "  background:transparent!important;" +
-          "  color:#ECEFF4!important;" +
-          "  text-shadow:0 0 8px rgba(0,0,0,0.9)!important;" +
-          "}";
-
-        injectedBorderlessStyle = document.createElement("style");
-        injectedBorderlessStyle.type = "text/css";
-        injectedBorderlessStyle.className = "drx-borderless-dark-theme";
-        injectedBorderlessStyle.appendChild(document.createTextNode(css));
-
-        document.head.appendChild(injectedBorderlessStyle);
-      } catch (e) {
-        log("injectBorderlessDarkTheme error:", e);
-      }
-    }
-
-    function setBorderlessDarkThemeEnabled(enabled) {
-      SuperMenuConfig.FEATURES.borderless_dark_theme = !!enabled;
-      injectBorderlessDarkTheme();
-    }
-
-// ============================================================================
-// КНОПКА В ТОП-БАРЕ (Меню выхода)
-// ============================================================================
-
-var topbar_button_added = false;
-
-function registerTopBarButton() {
-  try {
-    if (!SuperMenuConfig.FEATURES.topbar_exit_menu) {
-      // если выключено, сбрасываем флаг (на следующем запуске не добавим)
-      topbar_button_added = false;
-      return;
-    }
-
-    if (!Lampa || !Lampa.Panel || typeof Lampa.Panel.add !== 'function') {
-      log('Panel.add not available');
-      return;
-    }
-
-    if (topbar_button_added) {
-      log('Topbar button already added');
-      return;
-    }
-
-    Lampa.Panel.add({
-      name: 'supermenu_exit',
-      title: 'Меню выхода',
-      icon: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-            '<path d="M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            '<path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>' +
-            '</svg>',
-      onSelect: function() {
-        exitMenuOpen();
-      }
-    });
-
-    topbar_button_added = true;
-    log('Topbar button added');
-  } catch (err) {
-    logError('registerTopBarButton', err);
+  } catch (e) {
+    logError("Full listener setup", e);
   }
-}
 
-// ============================================================================
-// ХУКИ НА КАРТОЧКУ ФИЛЬМА (full event) — РЕЙТИНГИ + МЕТКИ
-// ============================================================================
+  // ============================================================================
+  // СИНХРОНИЗАЦИЯ НАСТРОЕК
+  // ============================================================================
 
-try {
-  if (Lampa && Lampa.Listener && Lampa.Listener.follow) {
-    Lampa.Listener.follow('full', function (e) {
-      try {
-        if (e.type !== 'complite') return;  // только когда карточка готова
+  function applyUserSettings() {
+    if (typeof Lampa === 'undefined' || !Lampa.Storage) return;
+    try {
+      SuperMenuConfig.FEATURES.madness = Lampa.Storage.get('supermenu_madness', 'false') === 'true';
+      SuperMenuConfig.FEATURES.madness_level = Lampa.Storage.get('supermenu_madness_level', 'normal');
+      SuperMenuConfig.FEATURES.ratings_tmdb = Lampa.Storage.get('supermenu_ratings_tmdb', 'true') === 'true';
+      SuperMenuConfig.FEATURES.ratings_imdb = Lampa.Storage.get('supermenu_ratings_imdb', 'true') === 'true';
+      SuperMenuConfig.FEATURES.ratings_kp = Lampa.Storage.get('supermenu_ratings_kp', 'false') === 'true';
+      SuperMenuConfig.FEATURES.label_colors = Lampa.Storage.get('supermenu_label_colors', 'true') === 'true';
+      SuperMenuConfig.LABEL_SCHEME = Lampa.Storage.get('supermenu_label_scheme', 'vivid');
+      SuperMenuConfig.FEATURES.topbar_exit_menu = Lampa.Storage.get('supermenu_topbar_exit', 'true') === 'true';
+      SuperMenuConfig.FEATURES.borderless_dark_theme = Lampa.Storage.get('supermenu_borderless_dark', 'false') === 'true';
+      SuperMenuConfig.FEATURES.voiceover_tracking = Lampa.Storage.get('supermenu_voiceover_tracking', 'false') === 'true';
+      SuperMenuConfig.VOICEOVER.enabled = SuperMenuConfig.FEATURES.voiceover_tracking;
 
-        var activity = e.object && e.object.activity ? e.object.activity : null;
-        if (!activity || typeof activity.render !== 'function') return;
-
-        var render = activity.render();
-        if (!render) return;
-
-        // Контейнер карточки
-        var full = render.find ? render.find('.full-start, .full-info') : 
-                   (render.querySelector ? render.querySelector('.full-start, .full-info') : null);
-        if (!full) return;
-
-        var movie = e.data && (e.data.movie || e.data.card || e.data.item) || {};
-        var meta = { title: movie.title, year: movie.original_title ? parseInt(movie.release_date || '') : '', 
-                     tmdbId: movie.id, type: movie.original_title ? 'movie' : 'tv', quality: movie.quality || '' };
-
-        // 1. Цветные метки (если включено)
-        if (SuperMenuConfig.FEATURES.label_colors) {
-          colorizeLabelsInContainer(full[0] || full, meta);
-        }
-
-        // 2. Рейтинги (если включено, используем данные карточки + кэш/API если нужно)
-        if (SuperMenuConfig.FEATURES.ratings_tmdb || SuperMenuConfig.FEATURES.ratings_imdb || SuperMenuConfig.FEATURES.ratings_kp) {
-          var ratingsContainer = document.createElement('div');
-          ratingsContainer.className = 'drx-ratings-block';
-          ratingsContainer.style.cssText = 'display: flex; gap: 0.5em; margin-top: 0.5em; font-size: 0.9em; opacity: 0.9;';
-
-          // TMDB (из vote_average, всегда есть в Lampa)
-          if (SuperMenuConfig.FEATURES.ratings_tmdb && typeof movie.vote_average !== 'undefined') {
-            var tmdbEl = document.createElement('div');
-            tmdbEl.className = 'drx-rating drx-rating--tmdb';
-            tmdbEl.textContent = 'TMDB: ' + Number(movie.vote_average || 0).toFixed(1);
-            tmdbEl.style.color = '#03A9F4';
-            ratingsContainer.appendChild(tmdbEl);
-          }
-
-          // IMDb (из кэша или данных)
-          if (SuperMenuConfig.FEATURES.ratings_imdb) {
-            getImdbRating(meta, function(result) {
-              if (result && result.value) {
-                var imdbEl = document.createElement('div');
-                imdbEl.className = 'drx-rating drx-rating--imdb';
-                imdbEl.textContent = 'IMDb: ' + result.value.toFixed(1);
-                imdbEl.style.color = '#FFD700';
-                ratingsContainer.appendChild(imdbEl);
-              }
-            });
-          }
-
-          // KP (аналогично, с API)
-          if (SuperMenuConfig.FEATURES.ratings_kp) {
-            getKpRating(meta, function(result) {
-              if (result && result.value) {
-                var kpEl = document.createElement('div');
-                kpEl.className = 'drx-rating drx-rating--kp';
-                kpEl.textContent = 'КП: ' + result.value.toFixed(1);
-                kpEl.style.color = '#FF5722';
-                ratingsContainer.appendChild(kpEl);
-              }
-            });
-          }
-
-          // Вставляем в карточку (после описания или инфо)
-          var insertPoint = full.find ? full.find('.full-info__text, .full-start__body') : 
-                            full.querySelector('.full-info__text, .full-start__body');
-          if (insertPoint && insertPoint[0]) {
-            insertPoint[0].appendChild(ratingsContainer);
-          } else {
-            full.append(ratingsContainer);
-          }
-        }
-
-      } catch (err) {
-        logError('full hook error', err);
+      // Perf mode
+      var perfMode = Lampa.Storage.get('supermenu_perf_mode', SuperMenuConfig.PLATFORM.isAndroid ? 'android_perf' : 'normal');
+      if (perfMode === 'android_perf') {
+        SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY = 500;
+        SuperMenuConfig.PERFORMANCE.THROTTLE_LIMIT = 150;
+        SuperMenuConfig.PERFORMANCE.MUTATION_THROTTLE = 80;
+      } else {
+        SuperMenuConfig.PERFORMANCE.DEBOUNCE_DELAY = 300;
+        SuperMenuConfig.PERFORMANCE.THROTTLE_LIMIT = 100;
+        SuperMenuConfig.PERFORMANCE.MUTATION_THROTTLE = 50;
       }
-    });
-    log('Full listener hooks added');
+
+      log('Config synced from Storage (perf: ' + perfMode + ')');
+    } catch (err) {
+      logError('applyUserSettings', err);
+    }
   }
-} catch (e) {
-  logError('Listener full setup', e);
-}
 
+  // ============================================================================
+  // ГЛОБАЛЬНЫЙ ХЕНДЛЕР ИЗМЕНЕНИЙ
+  // ============================================================================
 
-    // === ОЗУЧКИ (каркас) ===
-
-    function rememberVoiceoverSelection(meta) {
-      try {
-        if (!SuperMenuConfig.VOICEOVER.enabled) return;
-        if (!meta || !meta.key || !meta.voiceId) return;
-
-        var cache = SuperMenuConfig.VOICEOVER.cache;
-        var prev = cache[meta.key] || {};
-
-        cache[meta.key] = {
-          voiceId: meta.voiceId,
-          lastSeason:
-            meta.season != null ? meta.season : prev.lastSeason,
-          lastEpisode:
-            meta.episode != null ? meta.episode : prev.lastEpisode,
-          title: meta.title || prev.title || "",
-          updatedAt: Date.now()
-        };
-      } catch (e) {
-        log("rememberVoiceoverSelection error:", e);
-      }
-    }
-
-    function checkVoiceoverUpdate(meta) {
-      try {
-        if (!SuperMenuConfig.VOICEOVER.enabled) return { hasUpdate: false };
-        if (!meta || !meta.key) return { hasUpdate: false };
-
-        var cache = SuperMenuConfig.VOICEOVER.cache;
-        var prev = cache[meta.key];
-        if (!prev || !prev.voiceId) return { hasUpdate: false };
-
-        if (meta.availableVoiceId && meta.availableVoiceId !== prev.voiceId) {
-          return { hasUpdate: false };
-        }
-
-        if (
-          Number.isFinite(meta.latestSeason) &&
-          Number.isFinite(meta.latestEpisode) &&
-          Number.isFinite(prev.lastSeason) &&
-          Number.isFinite(prev.lastEpisode)
-        ) {
-          if (
-            meta.latestSeason > prev.lastSeason ||
-            (meta.latestSeason === prev.lastSeason &&
-              meta.latestEpisode > prev.lastEpisode)
-          ) {
-            return {
-              hasUpdate: true,
-              reason: "Новая серия в озвучке " + prev.voiceId
-            };
-          }
-        }
-
-// ============================================================================
-// ГЛОБАЛЬНЫЙ ХЕНДЛЕР ИЗМЕНЕНИЙ НАСТРОЕК (по паттерну themes/ui-tweak)
-// ============================================================================
-
-function onSettingsChanged(e) {
-  try {
-    // фильтруем только наши ключи
-    if (!e || !e.name || e.name.indexOf('supermenu_') !== 0) return;
-
-    log('Настройка изменена:', e.name, '→', e.value);
-
-    // обновляем SuperMenuConfig (если нужно, но onChange уже делает это локально)
+  function onSettingsChanged(e) {
+    if (!e || !e.name || !e.name.startsWith('supermenu_')) return;
     try {
-      applyUserSettings();  // если applyUserSettings определена; если нет, создадим ниже
-    } catch (err) {
-      logError('applyUserSettings in onSettingsChanged', err);
-    }
+      log('Setting changed:', e.name, '→', e.value);
+      applyUserSettings();
 
-    // применяем тему
-    try {
-      injectBorderlessDarkTheme();
-    } catch (err) {
-      logError('injectBorderlessDarkTheme on change', err);
-    }
-
-    // обновляем кнопку в топ-баре
-    try {
-      registerTopBarButton();
-    } catch (err) {
-      logError('registerTopBarButton on change', err);
-    }
-
-    // обновляем MADNESS
-    try {
-      initMadnessSectionHooks();
-    } catch (err) {
-      logError('initMadnessSectionHooks on change', err);
-    }
-
-    // перерисовываем метки (глобально, но targeted лучше в хуке full)
-    try {
+      // Применяем фичи
+      injectBorderlessTheme(SuperMenuConfig.FEATURES.borderless_dark_theme);
+      registerTopBar();
+      initMadnessHooks();
+      initVoiceoverHooks();
       if (SuperMenuConfig.FEATURES.label_colors) {
-        colorizeLabelsInContainer(document.body);
+        colorizeLabelsInContainer(document.body, {});
       }
     } catch (err) {
-      logError('colorizeLabelsInContainer on change', err);
+      logError('onSettingsChanged', err);
     }
-
-    // TODO: для рейтингов — вызов хука full (ниже добавим)
-
-  } catch (err) {
-    logError('onSettingsChanged', err);
   }
-}
 
+  // ============================================================================
+  // РЕГИСТРАЦИЯ НАСТРОЕК
+  // ============================================================================
 
-function applyUserSettings() {
-  try {
-    SuperMenuConfig.FEATURES.madness = Lampa.Storage.get('supermenu_madness', 'false') === 'true';
-    SuperMenuConfig.FEATURES.madness_level = Lampa.Storage.get('supermenu_madness_level', 'normal');
-    SuperMenuConfig.FEATURES.ratings_tmdb = Lampa.Storage.get('supermenu_ratings_tmdb', 'true') === 'true';
-    SuperMenuConfig.FEATURES.ratings_imdb = Lampa.Storage.get('supermenu_ratings_imdb', 'true') === 'true';
-    SuperMenuConfig.FEATURES.ratings_kp = Lampa.Storage.get('supermenu_ratings_kp', 'false') === 'true';
-    SuperMenuConfig.FEATURES.label_colors = Lampa.Storage.get('supermenu_label_colors', 'true') === 'true';
-    SuperMenuConfig.LABEL_SCHEME = Lampa.Storage.get('supermenu_label_scheme', 'vivid');
-    SuperMenuConfig.FEATURES.topbar_exit_menu = Lampa.Storage.get('supermenu_topbar_exit', 'true') === 'true';
-    SuperMenuConfig.FEATURES.borderless_dark_theme = Lampa.Storage.get('supermenu_borderless_dark', 'false') === 'true';
-    SuperMenuConfig.FEATURES.voiceover_tracking = Lampa.Storage.get('supermenu_voiceover_tracking', 'false') === 'true';
-    SuperMenuConfig.VOICEOVER.enabled = SuperMenuConfig.FEATURES.voiceover_tracking;  // если VOICEOVER определена
-  } catch (err) {
-    logError('applyUserSettings', err);
-  }
-}
-
-
-        return { hasUpdate: false };
-      } catch (e) {
-        log("checkVoiceoverUpdate error:", e);
-        return { hasUpdate: false };
-      }
-    }
-
-
- // ============================================================================
-// РЕГИСТРАЦИЯ НАСТРОЕК (по паттерну themes, с onChange + onSettingsChanged)
-// ============================================================================
-
-function addSettings() {
-  try {
-    if (!window.Lampa || !Lampa.Storage || !Lampa.SettingsApi || typeof Lampa.SettingsApi.addComponent !== 'function') {
-      logError('Lampa.SettingsApi not ready');
+  function addSettings() {
+    if (!Lampa || !Lampa.SettingsApi || typeof Lampa.SettingsApi.addComponent !== 'function' || Lampa.SettingsApi.__superMenuAdded) {
       return;
     }
+    Lampa.SettingsApi.__superMenuAdded = true;
 
-    if (Lampa.SettingsApi.__superMenuSettingsAdded) {
-      log('Settings already registered');
-      return;
-    }
-
-    // Инициализация дефолтов
+    // Дефолты
     var defaults = {
-      'supermenu_madness': 'false',
-      'supermenu_madness_level': 'normal',
+      'supermenu_madness': 'false', 'supermenu_madness_level': 'normal',
       'supermenu_perf_mode': SuperMenuConfig.PLATFORM.isAndroid ? 'android_perf' : 'normal',
-      'supermenu_ratings_tmdb': 'true',
-      'supermenu_ratings_imdb': 'true',
-      'supermenu_ratings_kp': 'false',
-      'supermenu_label_colors': 'true',
-      'supermenu_label_scheme': 'vivid',
-      'supermenu_topbar_exit': 'true',
-      'supermenu_borderless_dark': 'false',
+      'supermenu_ratings_tmdb': 'true', 'supermenu_ratings_imdb': 'true', 'supermenu_ratings_kp': 'false',
+      'supermenu_label_colors': 'true', 'supermenu_label_scheme': 'vivid',
+      'supermenu_topbar_exit': 'true', 'supermenu_borderless_dark': 'false',
       'supermenu_voiceover_tracking': 'false'
     };
-
     Object.keys(defaults).forEach(function (key) {
-      if (!Lampa.Storage.get(key)) {
-        Lampa.Storage.set(key, defaults[key]);
+      if (Lampa.Storage.get(key) === undefined) Lampa.Storage.set(key, defaults[key]);
+    });
+
+    Lampa.SettingsApi.addComponent({
+      component: 'supermenu', name: 'SuperMenu',
+      icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>'
+    });
+
+    // Параметры (с onChange)
+    var params = [
+      { name: 'supermenu_madness', type: 'trigger', default: false, title: 'MADNESS режим', desc: 'Визуальные эффекты', onCh: function(v) { SuperMenuConfig.FEATURES.madness = !!v; onSettingsChanged({name: 'supermenu_madness', value: v}); } },
+      { name: 'supermenu_madness_level', type: 'select', values: {off: 'Выкл', normal: 'Станд', full: 'Полн'}, default: 'normal', title: 'Уровень MADNESS', desc: 'Интенсивность', onCh: function(v) { SuperMenuConfig.FEATURES.madness_level = v; onSettingsChanged({name: 'supermenu_madness_level', value: v}); } },
+      { name: 'supermenu_perf_mode', type: 'select', values: {normal: 'Обыч', android_perf: 'Щадящ (Android)'}, default: defaults['supermenu_perf_mode'], title: 'Производительность', desc: 'Нагрузка', onCh: function(v) { onSettingsChanged({name: 'supermenu_perf_mode', value: v}); } },
+      { name: 'supermenu_ratings_tmdb', type: 'trigger', default: true, title: 'Рейтинг TMDB', desc: 'На карточках', onCh: function(v) { SuperMenuConfig.FEATURES.ratings_tmdb = !!v; onSettingsChanged({name: 'supermenu_ratings_tmdb', value: v}); } },
+      { name: 'supermenu_ratings_imdb', type: 'trigger', default: true, title: 'Рейтинг IMDb', desc: 'На карточках', onCh: function(v) { SuperMenuConfig.FEATURES.ratings_imdb = !!v; onSettingsChanged({name: 'supermenu_ratings_imdb', value: v}); } },
+      { name: 'supermenu_ratings_kp', type: 'trigger', default: false, title: 'Рейтинг КП', desc: 'На карточках', onCh: function(v) { SuperMenuConfig.FEATURES.ratings_kp = !!v; onSettingsChanged({name: 'supermenu_ratings_kp', value: v}); } },
+      { name: 'supermenu_label_colors', type: 'trigger', default: true, title: 'Цветные метки', desc: 'Качество/тип', onCh: function(v) { SuperMenuConfig.FEATURES.label_colors = !!v; onSettingsChanged({name: 'supermenu_label_colors', value: v}); } },
+      { name: 'supermenu_label_scheme', type: 'select', values: {vivid: 'Яркая', soft: 'Мягкая'}, default: 'vivid', title: 'Схема цветов', desc: 'Палитра', onCh: function(v) { SuperMenuConfig.LABEL_SCHEME = v; onSettingsChanged({name: 'supermenu_label_scheme', value: v}); } },
+      { name: 'supermenu_topbar_exit', type: 'trigger', default: true, title: 'Меню выхода в панели', desc: 'Кнопка сверху', onCh: function(v) { SuperMenuConfig.FEATURES.topbar_exit_menu = !!v; onSettingsChanged({name: 'supermenu_topbar_exit', value: v}); } },
+      { name: 'supermenu_borderless_dark', type: 'trigger', default: false, title: 'Тёмная тема без рамок', desc: 'Сглаженные карточки', onCh: function(v) { SuperMenuConfig.FEATURES.borderless_dark_theme = !!v; onSettingsChanged({name: 'supermenu_borderless_dark', value: v}); } },
+      { name: 'supermenu_voiceover_tracking', type: 'trigger', default: false, title: 'Трекинг озвучек (beta)', desc: 'Запоминать выбор', onCh: function(v) { SuperMenuConfig.FEATURES.voiceover_tracking = !!v; onSettingsChanged({name: 'supermenu_voiceover_tracking', value: v}); } }
+    ];
+
+    params.forEach(function (p) {
+      try {
+        Lampa.SettingsApi.addParam({
+          component: 'supermenu',
+          param: { name: p.name, type: p.type, default: p.default, values: p.values },
+          field: { name: p.title, description: p.desc },
+          onChange: p.onCh
+        });
+        log('Param added:', p.name);
+      } catch (e) {
+        logError('Param ' + p.name, e);
       }
     });
 
-    log('Creating component...');
-
-    // Создание компонента
-    try {
-      Lampa.SettingsApi.addComponent({
-        component: 'supermenu',
-        name: 'SuperMenu',
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">' +
-              '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 ' +
-              '10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8' +
-              's3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/>' +
-              '<circle cx="12" cy="12" r="3" fill="currentColor"/>' +
-              '</svg>'
-      });
-      log('Component created');
-    } catch (e) {
-      logError('Component creation', e);
-      return;
-    }
-
-    var added = 0;
-
-    // MADNESS режим
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_madness',
-          type: 'trigger',
-          default: false
-        },
-        field: {
-          name: 'MADNESS режим',
-          description: 'Визуальные эффекты интерфейса'
-        },
-        onChange: function (value) {
-          log('MADNESS режим:', value);
-          SuperMenuConfig.FEATURES.madness = !!value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_madness', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_madness', e); }
-
-    // Уровень MADNESS
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_madness_level',
-          type: 'select',
-          values: {
-            off: 'Выключен',
-            normal: 'Стандартный',
-            full: 'Полный'
-          },
-          default: 'normal'
-        },
-        field: {
-          name: 'Уровень MADNESS',
-          description: 'Интенсивность модификаций заголовков'
-        },
-        onChange: function (value) {
-          log('MADNESS уровень:', value);
-          SuperMenuConfig.FEATURES.madness_level = value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_madness_level', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_madness_level', e); }
-
-    // Производительность
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_perf_mode',
-          type: 'select',
-          values: {
-            normal: 'Обычный режим',
-            android_perf: 'Щадящий (Android TV)'
-          },
-          default: SuperMenuConfig.PLATFORM.isAndroid ? 'android_perf' : 'normal'
-        },
-        field: {
-          name: 'Производительность плагина',
-          description: 'Настройка отзывчивости и нагрузки'
-        },
-        onChange: function (value) {
-          log('Режим производительности:', value);
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_perf_mode', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_perf_mode', e); }
-
-    // Рейтинг TMDB
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_ratings_tmdb',
-          type: 'trigger',
-          default: true
-        },
-        field: {
-          name: 'Рейтинг TMDB',
-          description: 'Отображать рейтинг TMDB на карточках'
-        },
-        onChange: function (value) {
-          log('TMDB рейтинг:', value);
-          SuperMenuConfig.FEATURES.ratings_tmdb = !!value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_ratings_tmdb', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_ratings_tmdb', e); }
-
-    // Рейтинг IMDb
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_ratings_imdb',
-          type: 'trigger',
-          default: true
-        },
-        field: {
-          name: 'Рейтинг IMDb',
-          description: 'Отображать рейтинг IMDb на карточках'
-        },
-        onChange: function (value) {
-          log('IMDb рейтинг:', value);
-          SuperMenuConfig.FEATURES.ratings_imdb = !!value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_ratings_imdb', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_ratings_imdb', e); }
-
-    // Рейтинг КиноПоиск
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_ratings_kp',
-          type: 'trigger',
-          default: false
-        },
-        field: {
-          name: 'Рейтинг КиноПоиск',
-          description: 'Отображать рейтинг КиноПоиск на карточках'
-        },
-        onChange: function (value) {
-          log('КиноПоиск рейтинг:', value);
-          SuperMenuConfig.FEATURES.ratings_kp = !!value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_ratings_kp', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_ratings_kp', e); }
-
-    // Цветные метки
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_label_colors',
-          type: 'trigger',
-          default: true
-        },
-        field: {
-          name: 'Цветные метки качества и типа',
-          description: 'Раскраска текста качества и типа'
-        },
-        onChange: function (value) {
-          log('Цветные метки:', value);
-          SuperMenuConfig.FEATURES.label_colors = !!value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_label_colors', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_label_colors', e); }
-
-    // Схема цветов
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_label_scheme',
-          type: 'select',
-          values: {
-            vivid: 'Яркая схема',
-            soft: 'Мягкая схема'
-          },
-          default: 'vivid'
-        },
-        field: {
-          name: 'Цветовая схема меток',
-          description: 'Выбор палитры для меток'
-        },
-        onChange: function (value) {
-          log('Схема цветов:', value);
-          SuperMenuConfig.LABEL_SCHEME = value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_label_scheme', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_label_scheme', e); }
-
-    // Меню выхода в верхней панели
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_topbar_exit',
-          type: 'trigger',
-          default: true
-        },
-        field: {
-          name: 'Меню выхода в верхней панели',
-          description: 'Добавить кнопку меню выхода сверху'
-        },
-        onChange: function (value) {
-          log('Меню выхода в панели:', value);
-          SuperMenuConfig.FEATURES.topbar_exit_menu = !!value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_topbar_exit', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_topbar_exit', e); }
-
-    // Тёмная тема без рамок
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_borderless_dark',
-          type: 'trigger',
-          default: false
-        },
-        field: {
-          name: 'Тёмная тема без рамок',
-          description: 'Сглаженные карточки и тёмный фон'
-        },
-        onChange: function (value) {
-          log('Тёмная тема:', value);
-          SuperMenuConfig.FEATURES.borderless_dark_theme = !!value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_borderless_dark', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_borderless_dark', e); }
-
-    // Трекинг озвучек
-    try {
-      Lampa.SettingsApi.addParam({
-        component: 'supermenu',
-        param: {
-          name: 'supermenu_voiceover_tracking',
-          type: 'trigger',
-          default: false
-        },
-        field: {
-          name: 'Отслеживание озвучек (beta)',
-          description: 'Запоминать выбранную озвучку и новые серии'
-        },
-        onChange: function (value) {
-          log('Трекинг озвучек:', value);
-          SuperMenuConfig.FEATURES.voiceover_tracking = !!value;
-          if (typeof onSettingsChanged === 'function') {
-            onSettingsChanged({ name: 'supermenu_voiceover_tracking', value: value });
-          }
-        }
-      });
-      added++;
-    } catch (e) { logError('Param: supermenu_voiceover_tracking', e); }
-
-    if (added > 0) {
-      Lampa.SettingsApi.__superMenuSettingsAdded = true;
-      log('Settings registered: ' + added + ' params');
-    }
-
-  } catch (err) {
-    logError('addSettings', err);
+    log("Settings registered");
   }
-}
-
 
   // ============================================================================
   // ИНИЦИАЛИЗАЦИЯ
   // ============================================================================
 
-  var supermenu_inited = false;
+  var inited = false;
+  function start() {
+    if (inited) return;
+    inited = true;
+    log("Starting SuperMenu");
 
-  function supermenu_start() {
-    if (supermenu_inited) return;
-    supermenu_inited = true;
+    // Настройки
+    setTimeout(addSettings, 200);
 
-    try {
-      log('=== INITIALIZATION START ===');
+    // Применение фич
+    setTimeout(function () {
+      applyUserSettings();
+      injectBorderlessTheme(SuperMenuConfig.FEATURES.borderless_dark_theme);
+      registerTopBar();
+      initMadnessHooks();
+      initVoiceoverHooks();
+      if (SuperMenuConfig.FEATURES.label_colors) colorizeLabelsInContainer(document.body, {});
+      log("Features applied");
+    }, 500);
 
-      // Регистрируем настройки
-      setTimeout(function() {
-        log('Registering settings...');
-        addSettings();
-      }, 200);
-
-      // Применяем функционал
-      setTimeout(function() {
-        log('Applying features...');
-
-        try {
-          if (typeof applyUserSettings === 'function') {
-            applyUserSettings();
-          }
-        } catch (e) {
-          logError('applyUserSettings', e);
-        }
-
-        try {
-          if (Lampa.Storage.get('supermenu_borderless_dark') === 'true' && typeof injectBorderlessDarkTheme === 'function') {
-            injectBorderlessDarkTheme();
-          }
-        } catch (e) {
-          logError('injectBorderlessDarkTheme', e);
-        }
-
-        try {
-          if (Lampa.Storage.get('supermenu_topbar_exit') === 'true' && typeof registerTopBarButton === 'function') {
-            registerTopBarButton();
-          }
-        } catch (e) {
-          logError('registerTopBarButton', e);
-        }
-
-        try {
-          if (Lampa.Storage.get('supermenu_madness') === 'true' && typeof initMadnessSectionHooks === 'function') {
-            initMadnessSectionHooks();
-          }
-        } catch (e) {
-          logError('initMadnessSectionHooks', e);
-        }
-
-        try {
-          if (Lampa.Storage.get('supermenu_label_colors') === 'true' && typeof colorizeLabelsInContainer === 'function') {
-            colorizeLabelsInContainer(document.body);
-          }
-        } catch (e) {
-          logError('colorizeLabelsInContainer', e);
-        }
-
-// Применяем новые фичи на старте
-try {
-  applyUserSettings();  // глобальное обновление config
-} catch (e) {
-  logError('applyUserSettings on start', e);
-}
-
-try {
-  registerTopBarButton();
-} catch (e) {
-  logError('registerTopBarButton on start', e);
-}
-
-// Хуки уже добавлены выше, но если нужно перерисовать метки сразу
-try {
-  if (SuperMenuConfig.FEATURES.label_colors) {
-    colorizeLabelsInContainer(document.body);
-  }
-} catch (e) {
-  logError('colorize on start', e);
-}
-
-
-        // Подписка на изменения
-        try {
-          if (Lampa.Storage && Lampa.Storage.listener && typeof onSettingsChanged === 'function') {
-            Lampa.Storage.listener.follow('change', onSettingsChanged);
-          }
-        } catch (e) {
-          logError('Storage listener', e);
-        }
-
-        log('=== INITIALIZATION COMPLETE ===');
-      }, 500);
-
-    } catch (e) {
-      logError('Init', e);
+    // Listener изменений
+    if (Lampa.Storage && Lampa.Storage.listener) {
+      Lampa.Storage.listener.follow('change', onSettingsChanged);
     }
   }
 
-  // Подписка на события
+  // Запуск
   if (typeof Lampa !== 'undefined' && Lampa.Listener && Lampa.Listener.follow) {
-    log('Lampa found, subscribing to app:ready');
     Lampa.Listener.follow('app', function (e) {
-      try {
-        if (e.type === 'ready') {
-          log('app:ready received');
-          supermenu_start();
-        }
-      } catch (err) {
-        logError('app:ready handler', err);
-      }
+      if (e.type === 'ready') start();
     });
-
-    if (window.appready) {
-      log('App already ready');
-      supermenu_start();
-    }
+    if (window.appready) start();
   } else {
-    log('Using DOMContentLoaded fallback');
-    document.addEventListener('DOMContentLoaded', function () {
-      if (typeof Lampa !== 'undefined') {
-        supermenu_start();
-      } else {
-        logError('Lampa not found on DOMContentLoaded');
-      }
-    });
+    document.addEventListener('DOMContentLoaded', start);
   }
 
 })();
