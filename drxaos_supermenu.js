@@ -1,372 +1,547 @@
 (function () {
-  "use strict";
+  'use strict';
 
   // ============================================================================
-  // ЛОГИРОВАНИЕ & CONFIG
+  // КОНФИГУРАЦИЯ
   // ============================================================================
-
   var SuperMenuConfig = {
-    DEBUG: true,
-    FEATURES: {
-      madness: false,
-      madness_level: 'normal',
-      ratings_tmdb: true,
-      ratings_imdb: false,
-      ratings_kp: false,
-      label_colors: true,
-      topbar_exit_menu: true,
-      borderless_dark_theme: false,
-      voiceover_tracking: false
+    pluginName: 'DrxSuperMenu',
+    version: '1.0.0',
+    
+    // Флаги отладки
+    debug: true,
+    verbose: false,
+    
+    // Производительность
+    performance: {
+      debounceDelay: 300,
+      throttleLimit: 100,
+      mutationThrottle: 50
     },
-    PLATFORM: {
-      isAndroid: (typeof Lampa !== 'undefined' && Lampa.Platform) ? Lampa.Platform.is('android') : false
+    
+    // Определение платформы
+    platform: {
+      android: /Android/i.test(navigator.userAgent),
+      webos: /webOS/i.test(navigator.userAgent),
+      tizen: /Tizen/i.test(navigator.userAgent),
+      browser: !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)),
+      tv: /Android TV|Google TV|WebOS|Tizen|Smart TV|TV|Fire TV|FireTV|AFT|Roku|Apple TV|Chromecast/i.test(navigator.userAgent)
+    },
+    
+    // Цветовые схемы для меток
+    colorSchemes: {
+      vivid: {
+        '4K': '#FFD700',
+        'FHD': '#00CED1',
+        'HD': '#32CD32',
+        'SD': '#FF6347',
+        'CAM': '#DC143C',
+        'movie': '#4169E1',
+        'tv': '#9370DB'
+      },
+      soft: {
+        '4K': '#F0E68C',
+        'FHD': '#B0E0E6',
+        'HD': '#90EE90',
+        'SD': '#FFA07A',
+        'CAM': '#CD5C5C',
+        'movie': '#6495ED',
+        'tv': '#9F7AEA'
+      }
+    },
+    
+    // API параметры
+    api: {
+      kinopoisk: {
+        url: 'https://kinopoiskapiunofficial.tech/api/v2.2/films/',
+        key: '', // Будет загружен из Storage
+        enabled: true
+      },
+      tmdb: {
+        url: 'https://api.themoviedb.org/3/',
+        key: '', // Будет загружен из Storage
+        enabled: true
+      }
+    },
+    
+    // Кеш рейтингов (в памяти на время сессии)
+    cache: {
+      ratings: {},
+      tracking: {}
+    },
+    
+    // Включение функций
+    features: {
+      ratings: true,
+      tracking: true,
+      darkTheme: false,
+      colorLabels: true,
+      panelButton: true
     }
   };
-
-  function log(msg) {
-    if (!SuperMenuConfig.DEBUG) return;
-    try {
-      console.log("[SuperMenu]", msg);
-    } catch (e) {}
-  }
-
-  function logError(msg, err) {
-    try {
-      console.error("[SuperMenu ERROR]", msg, err && err.message ? err.message : err);
-    } catch (e) {}
-  }
 
   // ============================================================================
   // УТИЛИТЫ
   // ============================================================================
+  
+  function log(message, data) {
+    if (SuperMenuConfig.debug) {
+      console.log('[' + SuperMenuConfig.pluginName + '] ' + message, data || '');
+    }
+  }
 
-  function debounce(fn, delay) {
+  function logError(message, error) {
+    console.error('[' + SuperMenuConfig.pluginName + '] ' + message, error || '');
+  }
+
+  function debounce(func, wait) {
     var timeout;
-    return function() {
-      var ctx = this;
-      var args = arguments;
+    return function () {
+      var context = this, args = arguments;
       clearTimeout(timeout);
-      timeout = setTimeout(function() {
-        fn.apply(ctx, args);
-      }, delay || 300);
+      timeout = setTimeout(function () {
+        func.apply(context, args);
+      }, wait || SuperMenuConfig.performance.debounceDelay);
+    };
+  }
+
+  function throttle(func, limit) {
+    var inThrottle;
+    return function () {
+      var args = arguments;
+      var context = this;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(function () {
+          inThrottle = false;
+        }, limit || SuperMenuConfig.performance.throttleLimit);
+      }
     };
   }
 
   // ============================================================================
-  // КНОПКА В ТОПБАРЕ (по паттерну drxaos_theme - initUtilitiesButton)
+  // РАСКРАСКА КАРТОЧЕК
   // ============================================================================
-
-  var topbarButton = { el: null, menu: null, isOpen: false };
-
-  function injectTopbarButton() {
+  
+  function applyCardColoring(cardElement) {
     try {
-      if (!SuperMenuConfig.FEATURES.topbar_exit_menu) return;
-      if (topbarButton.el) return;
-      if (!Lampa || !Lampa.Head || !Lampa.Head.render) {
-        setTimeout(injectTopbarButton, 500);
-        return;
+      if (!cardElement) return;
+      
+      var scheme = Lampa.Storage.get('drxsupermenu_colorscheme', 'vivid');
+      var colors = SuperMenuConfig.colorSchemes[scheme] || SuperMenuConfig.colorSchemes.vivid;
+      
+      // Качество
+      var qualityEl = cardElement.querySelector('.card__quality, .card-quality');
+      if (qualityEl) {
+        var qualityText = qualityEl.textContent.trim().toUpperCase();
+        if (colors[qualityText]) {
+          qualityEl.style.color = colors[qualityText];
+          qualityEl.style.fontWeight = '700';
+        }
       }
-
-      var headActions = Lampa.Head.render.find('.headactions');
-      if (!headActions || !headActions.length) {
-        setTimeout(injectTopbarButton, 500);
-        return;
+      
+      // Тип контента
+      var typeEl = cardElement.querySelector('.card__type, .card-type');
+      if (typeEl) {
+        var typeText = typeEl.textContent.trim().toLowerCase();
+        if (colors[typeText]) {
+          typeEl.style.color = colors[typeText];
+          typeEl.style.fontWeight = '700';
+        }
       }
-
-      // HTML кнопки (SVG + стили, как в drxaos)
-      var btnHtml = '<div class="drxaos-exit-btn selector" style="' +
-        'position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;' +
-        'width:2em;height:2em;border-radius:0.3em;transition:all 0.3s ease;' +
-        '">' +
-        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="width:1.5em;height:1.5em;">' +
-        '<path d="M14.5 9.5L9.5 14.5M9.5 9.5L14.5 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
-        '<path d="M22 12C22 16.714 20.536 20.536 16.714 20.536C12.892 20.536 9.171 20.536 5.357 20.536C1.543 20.536 0 20.536 3.464 20.536" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
-        '</svg>' +
-        '</div>';
-
-      topbarButton.el = $(btnHtml);
-      headActions.append(topbarButton.el);
-
-      // Обработчик клика
-      topbarButton.el.on('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        toggleExitMenu();
-      });
-
-      // Обработчик Lampa-фокуса
-      if (Lampa.Controller && Lampa.Controller.listener) {
-        topbarButton.el.on('hover', function(type) {
-          if (type === 'enter') {
-            topbarButton.el.addClass('focus');
-          } else if (type === 'leave') {
-            topbarButton.el.removeClass('focus');
-          }
-        });
-      }
-
-      // Стили для фокуса
-      if (!document.getElementById('drxaos-exit-btn-styles')) {
-        var style = document.createElement('style');
-        style.id = 'drxaos-exit-btn-styles';
-        style.textContent = '.drxaos-exit-btn { color: #fff; } ' +
-          '.drxaos-exit-btn:hover, .drxaos-exit-btn.focus { background-color: rgba(255,255,255,0.1); transform: scale(1.1); }' +
-          '.drxaos-exit-menu { position: absolute; top: calc(100% + 0.5em); right: 0; background: rgba(0,0,0,0.95); ' +
-          'border: 1px solid #444; border-radius: 0.5em; padding: 0.5em; min-width: 200px; z-index: 10000; }' +
-          '.drxaos-exit-menu-item { padding: 0.8em 1em; cursor: pointer; border-radius: 0.3em; ' +
-          'transition: all 0.2s ease; color: #fff; } ' +
-          '.drxaos-exit-menu-item:hover, .drxaos-exit-menu-item.focus { background-color: #333; }';
-        document.head.appendChild(style);
-      }
-
-      log('Topbar button injected');
+      
     } catch (e) {
-      logError('injectTopbarButton', e);
-    }
-  }
-
-  function toggleExitMenu() {
-    if (topbarButton.isOpen) {
-      closeExitMenu();
-    } else {
-      openExitMenu();
-    }
-  }
-
-  function openExitMenu() {
-    if (!topbarButton.el) return;
-    if (topbarButton.menu) {
-      topbarButton.menu.show();
-      topbarButton.isOpen = true;
-      return;
-    }
-
-    var menuHtml = '<div class="drxaos-exit-menu">' +
-      '<div class="drxaos-exit-menu-item selector" data-action="reload">🔄 Перезагрузить</div>' +
-      '<div class="drxaos-exit-menu-item selector" data-action="clear_cache">🗑️ Очистить кэш</div>' +
-      '<div class="drxaos-exit-menu-item selector" data-action="exit">🚪 Выход</div>' +
-      '</div>';
-
-    topbarButton.menu = $(menuHtml);
-    topbarButton.el.append(topbarButton.menu);
-
-    topbarButton.menu.find('.drxaos-exit-menu-item').on('click', function(e) {
-      e.preventDefault();
-      var action = $(this).data('action');
-      handleMenuAction(action);
-      closeExitMenu();
-    });
-
-    topbarButton.isOpen = true;
-    log('Exit menu opened');
-  }
-
-  function closeExitMenu() {
-    if (topbarButton.menu) {
-      topbarButton.menu.hide();
-      topbarButton.isOpen = false;
-    }
-  }
-
-  function handleMenuAction(action) {
-    switch(action) {
-      case 'reload':
-        location.reload();
-        break;
-      case 'clear_cache':
-        try {
-          Lampa.Storage.clear();
-          Lampa.Noty && Lampa.Noty.show('Кэш очищен');
-        } catch(e) {}
-        break;
-      case 'exit':
-        try {
-          if (Lampa.Platform && Lampa.Platform.is('android')) {
-            Lampa.Android && Lampa.Android.exit();
-          } else if (Lampa.Platform && Lampa.Platform.is('webos')) {
-            window.close();
-          } else {
-            window.location.href = 'exit://exit';
-          }
-        } catch(e) {}
-        break;
+      logError('Error in applyCardColoring', e);
     }
   }
 
   // ============================================================================
-  // ХУКИ НА КАРТОЧКИ (RATINGS + LABELS)
+  // РЕЙТИНГИ КИНОПОИСКА
   // ============================================================================
-
-  try {
-    if (Lampa && Lampa.Listener && Lampa.Listener.follow) {
-      Lampa.Listener.follow('full', debounce(function(e) {
-        if (e.type !== 'complite') return;
-
-        // Получаем активность и рендер
-        var activity = e.object && e.object.activity;
-        if (!activity || typeof activity.render !== 'function') return;
-
-        var renderContent = activity.render();
-        if (!renderContent || !renderContent.find) return;
-
-        var fullStart = renderContent.find('.full-start, .full-info');
-        if (!fullStart || !fullStart.length) return;
-
-        // Пытаемся получить данные из разных мест
-        var card = e.data && (e.data.movie || e.data.item || e.data.card);
-        
-        // Если нет, пробуем через Lampa.Background
-        if (!card && Lampa.Background && Lampa.Background.current) {
-          try {
-            var bgData = Lampa.Background.current();
-            if (bgData && bgData.card) {
-              card = bgData.card;
-            }
-          } catch(err) {}
-        }
-
-        // Если всё ещё нет карточки - берём из активности
-        if (!card && e.object && e.object.card) {
-          card = e.object.card;
-        }
-
-        if (!card) {
-          log('No card data found');
-          return;
-        }
-
-        log('Card found:', card.title || card.name);
-
-        // Добавляем рейтинги
-        if (SuperMenuConfig.FEATURES.ratings_tmdb && card.vote_average) {
-          var ratingDiv = fullStart.find('.drxaos-rating-tmdb');
-          if (!ratingDiv.length) {
-            var rating = '<div class="drxaos-rating drxaos-rating-tmdb" style="margin-top:0.5em;font-size:0.9em;color:#03A9F4;">TMDB: ' +
-              Number(card.vote_average).toFixed(1) + '</div>';
-            fullStart.find('.full-start__detai, .full-info__text').first().append(rating);
-          }
-        }
-
-        // Добавляем метки
-        if (SuperMenuConfig.FEATURES.label_colors) {
-          var typeEl = fullStart.find('.card-type, .full-tag.tag--type');
-          if (typeEl.length && card.media_type) {
-            var colors = { 'movie': '#FFD54F', 'tv': '#4CAF50', 'anime': '#E91E63' };
-            var color = colors[card.media_type] || '#fff';
-            typeEl.css('color', color);
-          }
-        }
-
-      }, 150));
-      log('Full listener hooks registered');
-    }
-  } catch (e) {
-    logError('Full listener setup', e);
-  }
-
-  // ============================================================================
-  // СИНХРОНИЗАЦИЯ НАСТРОЕК
-  // ============================================================================
-
-  function applyUserSettings() {
+  
+  function fetchKinopoiskRating(kinopoiskId, callback) {
     try {
-      if (!Lampa || !Lampa.Storage) return;
-      SuperMenuConfig.FEATURES.madness = Lampa.Storage.get('supermenu_madness', 'false') === 'true';
-      SuperMenuConfig.FEATURES.ratings_tmdb = Lampa.Storage.get('supermenu_ratings_tmdb', 'true') === 'true';
-      SuperMenuConfig.FEATURES.label_colors = Lampa.Storage.get('supermenu_label_colors', 'true') === 'true';
-      SuperMenuConfig.FEATURES.topbar_exit_menu = Lampa.Storage.get('supermenu_topbar_exit', 'true') === 'true';
-      log('Settings applied');
-    } catch(err) {
-      logError('applyUserSettings', err);
+      if (!SuperMenuConfig.features.ratings) {
+        return callback(null);
+      }
+      
+      if (!kinopoiskId) {
+        return callback(null);
+      }
+      
+      // Проверка кеша
+      if (SuperMenuConfig.cache.ratings[kinopoiskId]) {
+        return callback(SuperMenuConfig.cache.ratings[kinopoiskId]);
+      }
+      
+      var apiKey = Lampa.Storage.get('kinopoisk_api_key', '');
+      if (!apiKey) {
+        log('KinoPoisk API key not found');
+        return callback(null);
+      }
+      
+      var url = SuperMenuConfig.api.kinopoisk.url + kinopoiskId;
+      
+      var network = new Lampa.Reguest();
+      network.native(url, function (data) {
+        try {
+          var rating = data.ratingKinopoisk || data.rating || null;
+          SuperMenuConfig.cache.ratings[kinopoiskId] = rating;
+          callback(rating);
+        } catch (e) {
+          logError('Error parsing KP rating', e);
+          callback(null);
+        }
+      }, function (error) {
+        logError('Error fetching KP rating', error);
+        callback(null);
+      }, false, {
+        headers: {
+          'X-API-KEY': apiKey
+        }
+      });
+      
+    } catch (e) {
+      logError('Error in fetchKinopoiskRating', e);
+      callback(null);
     }
   }
 
   // ============================================================================
-  // РЕГИСТРАЦИЯ НАСТРОЕК
+  // ТРЕКИНГ ОЗВУЧЕК
   // ============================================================================
+  
+  function saveTrackingInfo(itemId, data) {
+    try {
+      if (!SuperMenuConfig.features.tracking) return;
+      
+      SuperMenuConfig.cache.tracking[itemId] = {
+        voice: data.voice || '',
+        season: data.season || 1,
+        episode: data.episode || 1,
+        timestamp: Date.now()
+      };
+      
+      // Сохранение в Storage
+      Lampa.Storage.set('drxsupermenu_tracking', SuperMenuConfig.cache.tracking);
+      
+    } catch (e) {
+      logError('Error in saveTrackingInfo', e);
+    }
+  }
 
+  function getTrackingInfo(itemId) {
+    try {
+      if (!SuperMenuConfig.features.tracking) return null;
+      
+      if (!SuperMenuConfig.cache.tracking[itemId]) {
+        var stored = Lampa.Storage.get('drxsupermenu_tracking', {});
+        SuperMenuConfig.cache.tracking = stored;
+      }
+      
+      return SuperMenuConfig.cache.tracking[itemId] || null;
+      
+    } catch (e) {
+      logError('Error in getTrackingInfo', e);
+      return null;
+    }
+  }
+
+  // ============================================================================
+  // ТЕМА БЕЗ РАМОК
+  // ============================================================================
+  
+  function applyDarkTheme(enable) {
+    try {
+      var styleId = 'drxsupermenu-dark-theme';
+      var existingStyle = document.getElementById(styleId);
+      
+      if (enable) {
+        if (existingStyle) return;
+        
+        var css = `
+          .card {
+            border: none !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+          }
+          .card--focus, .card.focus {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+          }
+        `;
+        
+        var style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = css;
+        document.head.appendChild(style);
+        
+        log('Dark theme applied');
+        
+      } else {
+        if (existingStyle) {
+          existingStyle.remove();
+          log('Dark theme removed');
+        }
+      }
+      
+    } catch (e) {
+      logError('Error in applyDarkTheme', e);
+    }
+  }
+
+  // ============================================================================
+  // КНОПКА В ПАНЕЛИ
+  // ============================================================================
+  
+  function addPanelButton() {
+    try {
+      if (!SuperMenuConfig.features.panelButton) return;
+      if (!Lampa.Panel) return;
+      
+      var buttonHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/></svg>';
+      
+      Lampa.Panel.add({
+        name: 'drxsupermenu',
+        html: buttonHTML,
+        position: 'right',
+        onClick: function () {
+          Lampa.Noty.show('DrxSuperMenu активен!');
+        }
+      });
+      
+      log('Panel button added');
+      
+    } catch (e) {
+      logError('Error in addPanelButton', e);
+    }
+  }
+
+  // ============================================================================
+  // НАСТРОЙКИ
+  // ============================================================================
+  
   function addSettings() {
     try {
-      if (!Lampa || !Lampa.SettingsApi) return;
-      if (Lampa.SettingsApi.__superMenuAdded) return;
-      Lampa.SettingsApi.__superMenuAdded = true;
-
-      var defaults = {
-        'supermenu_madness': 'false',
-        'supermenu_ratings_tmdb': 'true',
-        'supermenu_label_colors': 'true',
-        'supermenu_topbar_exit': 'true'
-      };
-
-      Object.keys(defaults).forEach(function(key) {
-        if (!Lampa.Storage.get(key)) {
-          Lampa.Storage.set(key, defaults[key]);
-        }
-      });
-
+      if (!Lampa.SettingsApi) return;
+      
       Lampa.SettingsApi.addComponent({
-        component: 'supermenu',
-        name: 'SuperMenu',
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>'
+        component: 'drxsupermenu',
+        name: 'DrxSuperMenu',
+        icon: '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/></svg>'
       });
-
-      var params = [
-        { name: 'supermenu_madness', type: 'trigger', title: 'MADNESS режим', desc: 'Визуальные эффекты' },
-        { name: 'supermenu_ratings_tmdb', type: 'trigger', title: 'Рейтинг TMDB', desc: 'На карточках' },
-        { name: 'supermenu_label_colors', type: 'trigger', title: 'Цветные метки', desc: 'Для качества/типа' },
-        { name: 'supermenu_topbar_exit', type: 'trigger', title: 'Меню выхода в панели', desc: 'Кнопка сверху' }
-      ];
-
-      params.forEach(function(p) {
-        try {
-          Lampa.SettingsApi.addParam({
-            component: 'supermenu',
-            param: { name: p.name, type: p.type, default: p.type === 'trigger' ? false : 'default' },
-            field: { name: p.title, description: p.desc },
-            onChange: function(value) {
-              Lampa.Storage.set(p.name, value ? 'true' : 'false');
-              applyUserSettings();
-              injectTopbarButton(); // Перинициализация кнопки если её настройка изменилась
-            }
-          });
-        } catch(err) {
-          logError('Param ' + p.name, err);
+      
+      // Цветовая схема
+      Lampa.SettingsApi.addParam({
+        component: 'drxsupermenu',
+        param: {
+          name: 'drxsupermenu_colorscheme',
+          type: 'select',
+          values: {
+            'vivid': 'Яркая',
+            'soft': 'Мягкая'
+          },
+          default: 'vivid'
+        },
+        field: {
+          name: 'Цветовая схема',
+          description: 'Выберите схему окраски меток качества'
+        },
+        onChange: function () {
+          applyAllSettings();
         }
       });
-
-      log('Settings registered');
+      
+      // Рейтинги
+      Lampa.SettingsApi.addParam({
+        component: 'drxsupermenu',
+        param: {
+          name: 'drxsupermenu_ratings',
+          type: 'trigger',
+          default: true
+        },
+        field: {
+          name: 'Показывать рейтинги',
+          description: 'Получать рейтинги КиноПоиска'
+        },
+        onChange: function (value) {
+          SuperMenuConfig.features.ratings = value;
+        }
+      });
+      
+      // Трекинг
+      Lampa.SettingsApi.addParam({
+        component: 'drxsupermenu',
+        param: {
+          name: 'drxsupermenu_tracking',
+          type: 'trigger',
+          default: true
+        },
+        field: {
+          name: 'Трекинг озвучек',
+          description: 'Отслеживать просмотренные серии и озвучки'
+        },
+        onChange: function (value) {
+          SuperMenuConfig.features.tracking = value;
+        }
+      });
+      
+      // Тёмная тема
+      Lampa.SettingsApi.addParam({
+        component: 'drxsupermenu',
+        param: {
+          name: 'drxsupermenu_darktheme',
+          type: 'trigger',
+          default: false
+        },
+        field: {
+          name: 'Тема без рамок',
+          description: 'Убрать рамки у карточек'
+        },
+        onChange: function (value) {
+          SuperMenuConfig.features.darkTheme = value;
+          applyDarkTheme(value);
+        }
+      });
+      
+      log('Settings added');
+      
     } catch (e) {
-      logError('addSettings', e);
+      logError('Error in addSettings', e);
     }
   }
+
+  // ============================================================================
+  // ПРИМЕНЕНИЕ ВСЕХ НАСТРОЕК
+  // ============================================================================
+  
+  function applyAllSettings() {
+    try {
+      // Загрузка настроек
+      SuperMenuConfig.features.ratings = Lampa.Storage.get('drxsupermenu_ratings', true);
+      SuperMenuConfig.features.tracking = Lampa.Storage.get('drxsupermenu_tracking', true);
+      SuperMenuConfig.features.darkTheme = Lampa.Storage.get('drxsupermenu_darktheme', false);
+      
+      applyDarkTheme(SuperMenuConfig.features.darkTheme);
+      
+      // Применение окраски ко всем карточкам
+      var cards = document.querySelectorAll('.card');
+      cards.forEach(function (card) {
+        applyCardColoring(card);
+      });
+      
+      log('All settings applied');
+      
+    } catch (e) {
+      logError('Error in applyAllSettings', e);
+    }
+  }
+
+  // ============================================================================
+  // НАБЛЮДАТЕЛЬ ЗА DOM
+  // ============================================================================
+  
+  function initMutationObserver() {
+    try {
+      var observer = new MutationObserver(throttle(function (mutations) {
+        mutations.forEach(function (mutation) {
+          if (mutation.addedNodes && mutation.addedNodes.length) {
+            mutation.addedNodes.forEach(function (node) {
+              if (node.nodeType === 1) {
+                if (node.classList && node.classList.contains('card')) {
+                  applyCardColoring(node);
+                }
+                var cards = node.querySelectorAll('.card');
+                if (cards.length) {
+                  cards.forEach(function (card) {
+                    applyCardColoring(card);
+                  });
+                }
+              }
+            });
+          }
+        });
+      }, SuperMenuConfig.performance.mutationThrottle));
+      
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+      
+      log('MutationObserver initialized');
+      
+    } catch (e) {
+      logError('Error in initMutationObserver', e);
+    }
+  }
+
+  // ============================================================================
+  // ЭКСПОРТ API
+  // ============================================================================
+  
+  window.DrxSuperMenu = {
+    version: SuperMenuConfig.version,
+    applyCardColoring: applyCardColoring,
+    fetchKinopoiskRating: fetchKinopoiskRating,
+    saveTrackingInfo: saveTrackingInfo,
+    getTrackingInfo: getTrackingInfo,
+    applyDarkTheme: applyDarkTheme,
+    applyAllSettings: applyAllSettings,
+    config: SuperMenuConfig
+  };
 
   // ============================================================================
   // ИНИЦИАЛИЗАЦИЯ
   // ============================================================================
-
-  var inited = false;
-
+  
   function start() {
-    if (inited) return;
-    inited = true;
-
-    setTimeout(addSettings, 200);
-    setTimeout(function() {
-      applyUserSettings();
-      injectTopbarButton();
-      log('SuperMenu started');
-    }, 500);
+    try {
+      log('Starting plugin v' + SuperMenuConfig.version);
+      
+      addSettings();
+      addPanelButton();
+      applyAllSettings();
+      initMutationObserver();
+      
+      log('Plugin started successfully');
+      
+    } catch (e) {
+      logError('Error starting plugin', e);
+    }
   }
 
-  if (typeof Lampa !== 'undefined' && Lampa.Listener && Lampa.Listener.follow) {
-    Lampa.Listener.follow('app', function(e) {
-      if (e.type === 'ready') {
-        setTimeout(start, 500);
+  // ============================================================================
+  // BOOTSTRAP - ОЖИДАНИЕ LAMPA API
+  // ============================================================================
+  
+  function bootstrap() {
+    var checkInterval = setInterval(function () {
+      try {
+        if (window.Lampa && Lampa.SettingsApi && Lampa.Panel && Lampa.Listener && Lampa.Storage) {
+          clearInterval(checkInterval);
+          log('Lampa API detected');
+          
+          if (window.appready === true) {
+            start();
+          } else {
+            Lampa.Listener.follow('app', function (e) {
+              if (e.type === 'ready') {
+                start();
+              }
+            });
+          }
+        }
+      } catch (e) {
+        logError('Error in bootstrap', e);
       }
-    });
-    if (window.appready) start();
-  } else {
-    document.addEventListener('DOMContentLoaded', start);
+    }, 100);
+    
+    // Таймаут безопасности
+    setTimeout(function () {
+      clearInterval(checkInterval);
+    }, 30000);
   }
+
+  // Запуск
+  bootstrap();
 
 })();
