@@ -1,12 +1,14 @@
-name: Unzip File on Push
+name: Select and Unzip Files
 
 on:
-  push:
-    paths:
-      - "*.zip" # Слежение за изменениями ZIP-файлов только
+  workflow_dispatch:  # Позволяет ручной запуск
+    inputs:
+      selected_files:
+        description: "Введите через запятую ZIP-файлы для распаковки (например: file1.zip, file2.zip)"
+        required: true
 
 jobs:
-  unzip:
+  list_and_unzip:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,19 +18,19 @@ jobs:
     - name: Install unzip Utility
       run: sudo apt-get install -y unzip
 
-    - name: Find and Unzip Files
+    - name: Show Available ZIP Files
       run: |
-        for zip in $(find . -name "*.zip"); do
-          unzip "$zip" -d "$(dirname "$zip")"
-          rm "$zip" # Удаление исходного ZIP-файла (опционально)
-        done
+        echo "Найденные ZIP-файлы в репозитории:"
+        find . -name "*.zip"  # Ищет все ZIP-файлы в репозитории
 
-    - name: Commit Changes
+    - name: Unzip Selected Files
       run: |
-        git config --global user.name "GitHub Actions Bot"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add .
-        git commit -m "Unzipped files from upload"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        IFS=',' read -r -a files <<< "${{ github.event.inputs.selected_files }}"
+        for file in "${files[@]}"; do
+          if [ -f "$file" ]; then
+            unzip "$file" -d "$(dirname "$file")"
+            echo "Unzipped: $file"
+          else
+            echo "Файл не найден: $file"
+          fi
+        done
