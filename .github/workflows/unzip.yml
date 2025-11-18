@@ -1,0 +1,34 @@
+name: Unzip File on Push
+
+on:
+  push:
+    paths:
+      - "*.zip" # Слежение за изменениями ZIP-файлов только
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Install unzip Utility
+      run: sudo apt-get install -y unzip
+
+    - name: Find and Unzip Files
+      run: |
+        for zip in $(find . -name "*.zip"); do
+          unzip "$zip" -d "$(dirname "$zip")"
+          rm "$zip" # Удаление исходного ZIP-файла (опционально)
+        done
+
+    - name: Commit Changes
+      run: |
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add .
+        git commit -m "Unzipped files from upload"
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
