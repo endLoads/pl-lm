@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'CUB OFF v8.0 (Smart Filter)';
+    var PLUGIN_VERSION = 'CUB OFF v9.0 (Interactive)';
 
     // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
@@ -40,34 +40,66 @@
         document.body.appendChild(style);
     }
 
-    // 3. УМНЫЙ TIME KILLER
+    // 3. ИНТЕРАКТИВНЫЙ TIME KILLER
+    var isKillerPaused = false;
+    var pauseTimer = null;
+
+    // Функция "Пауза убийцы" (вызывается при действиях пользователя)
+    function pauseKiller() {
+        // console.log('[Interactive] Пользователь активен -> Пауза ускорения');
+        isKillerPaused = true;
+        
+        if (pauseTimer) clearTimeout(pauseTimer);
+        
+        // Возвращаем режим убийцы через 6 секунд бездействия
+        // Используем originalSetTimeout (который мы сохраним ниже)
+    }
+
     function hackTimeouts() {
         var originalSetTimeout = window.setTimeout;
         
+        // Переопределяем паузу, чтобы использовать оригинал
+        var startPauseTimer = function() {
+            if (pauseTimer) clearTimeout(pauseTimer);
+            pauseTimer = originalSetTimeout(function() {
+                // console.log('[Interactive] Бездействие -> Включаем ускорение');
+                isKillerPaused = false;
+            }, 6000);
+        };
+
+        // Хакнутый таймер
         window.setTimeout = function(func, delay) {
-            
-            // ЛОГИКА ФИЛЬТРАЦИИ:
-            
-            // 1. Если это точное рекламное время (5, 10, 15, 30 сек) -> УБИВАЕМ
-            if (delay === 5000 || delay === 10000 || delay === 15000 || delay === 30000) {
-                // console.log('[SmartFilter] Killed Ad Timer: ' + delay);
-                return originalSetTimeout(func, 1);
+            // Если режим НЕ на паузе И задержка похожа на рекламную (2.5 - 9 сек)
+            if (!isKillerPaused && delay > 2500 && delay < 9000) {
+                return originalSetTimeout(func, 1); // Ускоряем
             }
-            
-            // 2. Если это диапазон интерфейса (3-4 сек) -> НЕ ТРОГАЕМ
-            if (delay >= 3000 && delay <= 4000) {
-                // console.log('[SmartFilter] Saved UI Timer: ' + delay);
-                return originalSetTimeout(func, delay);
-            }
-
-            // 3. Остальные подозрительные (от 6 до 9 сек) -> УБИВАЕМ (на всякий случай)
-            if (delay > 6000 && delay < 9000) {
-                 return originalSetTimeout(func, 1);
-            }
-
-            // Все остальное - пропускаем
             return originalSetTimeout(func, delay);
         };
+
+        // СЛУШАТЕЛИ АКТИВНОСТИ (Самое важное!)
+        // Ловим любые нажатия на пульте или экране
+        window.addEventListener('keydown', function() {
+            pauseKiller();
+            startPauseTimer();
+        }, true);
+        
+        window.addEventListener('click', function() {
+            pauseKiller();
+            startPauseTimer();
+        }, true);
+        
+        window.addEventListener('mousemove', function() {
+             // Можно добавить и мышь, но осторожно (будет постоянно парить)
+             // Лучше только клики
+        }, true);
+        
+        // Также слушаем события Лампы (появление контроллера)
+        Lampa.Listener.follow('toggle', function(e) {
+            if(e.name === 'select' || e.name === 'enter') {
+                pauseKiller();
+                startPauseTimer();
+            }
+        });
     }
 
     // 4. CLEANER
@@ -98,7 +130,7 @@
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        hackTimeouts(); // <--- Умный фильтр
+        hackTimeouts(); // <--- Интерактивный режим
         forcePlay();
         injectInfo();
     }
