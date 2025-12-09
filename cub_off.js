@@ -1,9 +1,7 @@
 (function () {
     'use strict';
 
-    // ========================================================================
-    // 1. КОНФИГУРАЦИЯ (Config)
-    // ========================================================================
+    // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
         lang: 'ru',
         lang_use: true,
@@ -22,7 +20,7 @@
         developer: { fps: false, log: false, status: false, active: false },
         disable_features: {
             dmca: true,
-            ads: true,         // Главный рубильник
+            ads: true,
             trailers: false,
             reactions: false,
             discuss: false,
@@ -34,133 +32,109 @@
     };
     window.lampa_settings = _cleanSettings;
 
-    // ========================================================================
-    // 2. CSS-БЛОКИРОВКА (Визуальный слой)
-    // ========================================================================
+    // 2. ВИЗУАЛЬНАЯ БЛОКИРОВКА (CSS)
     function injectUltimateCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
-            /* Скрываем всё рекламное */
             .ad-server, .ad-server-resize, [data-component="ad"], .card-promo,
             .button--subscribe, .settings--account-premium, .open--notice,
             .selectbox-item__lock 
             { display: none !important; }
 
-            /* УБИВАЕМ СЕРЫЙ ЭКРАН В ПЛЕЕРЕ */
-            /* Блокируем любые оверлеи поверх видео, кроме контролов */
+            /* Скрываем рекламу, НО оставляем ее в DOM, чтобы JS мог ее "перемотать" */
             .player-advertising, 
             #oframe_player_advertising,
             .layer--advertising,
             .ad-preroll-container,
             div[class*="advertising"],
             div[id*="advertising"],
-            div[class*="preroll"],
-            .vjs-ad-playing, .vjs-ad-loading 
+            div[class*="preroll"]
             {
-                display: none !important;
-                visibility: hidden !important;
                 opacity: 0 !important;
-                width: 0 !important;
-                height: 0 !important;
-                pointer-events: none !important;
                 z-index: -9999 !important;
+                pointer-events: none !important;
+                /* Не используем display:none для плеера, иначе он может встать на паузу */
+                visibility: hidden !important; 
             }
-            
-            /* Если это iframe, делаем его прозрачным для кликов */
-            iframe[src*="ad"] { display: none !important; }
         `;
         document.body.appendChild(style);
     }
 
-    // ========================================================================
-    // 3. БЛОКИРОВКА НА УРОВНЕ ЯДРА (JS Patch)
-    // ========================================================================
-    function patchLampaCore() {
-        console.log('[AdBlock] Patching Lampa Core...');
-
-        // 1. Отключаем модуль рекламы
-        if (Lampa.Ad) {
-            Lampa.Ad.launch = function (data) {
-                console.log('[AdBlock] Lampa.Ad.launch blocked');
-                if (data && data.callback) data.callback(); // Сразу "реклама прошла"
-            };
-        }
-
-        // 2. Патчим плеер (Если реклама вызывается методами плеера)
-        // Перехватываем метод добавления рекламы в плеер
-        if (Lampa.Player) {
-            var originalCallback = Lampa.Player.callback;
+    // 3. УСКОРИТЕЛЬ (Speed Hack) - Решает проблему задержки
+    function startSpeedHack() {
+        setInterval(function() {
+            // Ищем признаки рекламы
+            var adLayers = document.querySelectorAll('.player-advertising, .layer--advertising, #oframe_player_advertising, .ad-preroll-container');
+            var isAdPresent = false;
             
-            // Если плеер пытается сообщить о событии рекламы - игнорируем
-            /*
-             Мы не можем легко перехватить внутренние методы плеера, 
-             но можем слушать события и убивать их
-            */
-            Lampa.Player.listener.follow('ad', function(e) {
-                console.log('[AdBlock] Event "ad" detected - destroying');
-                $('.player-advertising').remove();
-                if(Lampa.Player.video && Lampa.Player.video.play) Lampa.Player.video.play();
-            });
-        }
-        
-        // 3. Глобальный перехватчик сообщений (postMessage)
-        // Часто реклама в iframe общается с основным окном
-        window.addEventListener("message", function(event) {
-            if (typeof event.data === 'string' && 
-               (event.data.includes('ad') || event.data.includes('advertising'))) {
-                console.log('[AdBlock] Blocked message:', event.data);
-                event.stopImmediatePropagation();
+            // Проверяем, есть ли хоть один рекламный слой
+            if (adLayers.length > 0) isAdPresent = true;
+            
+            // Также ищем по ключевым словам в классах body или плеера
+            if ($('body').hasClass('ad-playing') || $('.vjs-ad-playing').length) isAdPresent = true;
+
+            var video = document.querySelector('video');
+
+            if (video && isAdPresent) {
+                // Если реклама есть - УСКОРЯЕМ
+                console.log('[AdBlock] Ускоряем скрытую рекламу (x16)...');
+                
+                if (video.playbackRate !== 16) video.playbackRate = 16;
+                if (!video.muted) video.muted = true; // Глушим звук
+                
+                // Если видео стоит на паузе (иногда реклама ждет клика) - принудительно пускаем
+                if (video.paused) {
+                    try { video.play(); } catch(e) {}
+                }
+            } else if (video && !isAdPresent) {
+                // Если рекламы нет (фильм) - возвращаем норму
+                // Но только если скорость была изменена нами (чтобы не ломать перемотку пользователя)
+                if (video.playbackRate === 16) {
+                    console.log('[AdBlock] Реклама кончилась, возврат скорости (x1)');
+                    video.playbackRate = 1;
+                    video.muted = false; // Включаем звук обратно
+                }
             }
-        }, true);
+        }, 500); // Проверка каждые полсекунды
     }
 
-    // ========================================================================
-    // 4. МУТАЦИОННЫЙ ЩИТ (DOM Defender)
-    // Следит, чтобы рекламный блок не появился в DOM
-    // ========================================================================
+    // 4. БЛОКИРОВКА НА УРОВНЕ ЯДРА
+    function patchLampaCore() {
+        if (Lampa.Ad) {
+            Lampa.Ad.launch = function (data) {
+                if (data && data.callback) data.callback();
+            };
+        }
+    }
+
+    // 5. DOM ОЧИСТКА (Вспомогательная)
     function startDomDefender() {
+        // Удаляем только статические баннеры, не трогаем плеер (его ускоряет SpeedHack)
         var observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
                 if (mutation.addedNodes.length) {
                     mutation.addedNodes.forEach(function(node) {
-                        // Если это HTML элемент
-                        if (node.nodeType === 1) { 
-                            var className = node.className || "";
-                            var idName = node.id || "";
-                            var textContent = node.textContent || "";
-                            
-                            // Проверка по классам и ID
-                            if (
-                                (typeof className === 'string' && className.indexOf('advertising') !== -1) ||
-                                (typeof idName === 'string' && idName.indexOf('advertising') !== -1) ||
-                                (textContent.trim() === 'Реклама')
-                            ) {
-                                console.log('[AdBlock] Removing node:', node);
-                                node.remove(); // Удаляем элемент мгновенно
-                                
-                                // Если видео стояло на паузе - запускаем
-                                var video = document.querySelector('video');
-                                if(video && video.paused) video.play();
-                            }
+                        if (node.nodeType === 1) {
+                             // Удаляем текстовые надписи "Реклама", которые не видео
+                             if (node.textContent.trim() === 'Реклама' && node.tagName !== 'VIDEO') {
+                                 node.remove();
+                             }
                         }
                     });
                 }
             });
         });
-
-        // Следим за всем телом документа
         observer.observe(document.body, { childList: true, subtree: true });
     }
 
-    // ========================================================================
-    // 5. ЗАПУСК
-    // ========================================================================
+    // ЗАПУСК
     function startPlugin() {
-        // Хак региона
-        localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
+        var time = new Date().getTime();
+        localStorage.setItem("region", JSON.stringify({code: "uk", time: time}));
         
         injectUltimateCSS();
         patchLampaCore();
+        startSpeedHack(); // <-- Запуск ускорения
         startDomDefender();
     }
 
