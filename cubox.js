@@ -57,9 +57,8 @@
         });
     }
 
-            // Меню настроек (V3 - Исправленный скролл)
+                // Меню настроек (V4 - Native Lampa Scroll Fix)
     function addMenu() {
-        // Создаем элемент, используя стандартные классы Лампы
         var field = $(`
             <div class="settings-folder selector" data-component="cubox_core">
                 <div class="settings-folder__icon">
@@ -76,38 +75,36 @@
         
         Lampa.Settings.listener.follow('open', function (e) {
             if (e.name == 'main') {
-                // Ждем рендера
-                setTimeout(function() {
-                    // 1. Ищем правильный скролл-контейнер
-                    var container = $('.settings__content .settings__layer'); 
+                // Ждем пока Лампа построит DOM
+                var timer = setInterval(function() {
+                    // Ищем слой, который РЕАЛЬНО скроллится (scroll__content)
+                    var scrollLayer = $('.settings__content .scroll__content');
                     
-                    // Если слоя нет (старая Лампа), берем контент, но проверяем скролл
-                    if (!container.length) container = $('.settings__content');
-                    
-                    // 2. Вставляем Cubox ПЕРЕД первым элементом (обычно это "Аккаунт" или "Интерфейс")
-                    // Это гарантирует, что он попадет в поток
-                    var firstItem = container.find('.settings-folder').first();
-                    
-                    if (firstItem.length) {
-                        firstItem.before(field);
-                    } else {
-                        container.append(field);
+                    if (scrollLayer.length) {
+                        clearInterval(timer);
+                        
+                        // Находим первый элемент внутри скролла
+                        var first = scrollLayer.find('.settings-folder').first();
+                        
+                        // Вставляем ПЕРЕД ним. Теперь наш пункт внутри скролла.
+                        if (first.length) {
+                            first.before(field);
+                        } else {
+                            scrollLayer.append(field);
+                        }
+                        
+                        // Пересчитываем фокус, чтобы навигация пультом не сломалась
+                        Lampa.Controller.enable('content');
+                        
+                        field.on('hover:enter', function () {
+                            openStore();
+                        });
                     }
-                    
-                    // 3. Важно: Удаляем возможные конфликты позиционирования
-                    field.css({
-                        'position': 'relative',
-                        'z-index': '1'
-                    });
-
-                    // 4. Навешиваем обработчик
-                    field.unbind('hover:enter').on('hover:enter', function () {
-                        openStore();
-                    });
-                }, 50); // Чуть увеличил задержку для надежности
+                }, 50);
             }
         });
     }
+
 
 
 
