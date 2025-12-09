@@ -2,17 +2,22 @@
     'use strict';
     
     // --- НАСТРОЙКИ ---
-    var REPO_ROOT = 'https://raw.githubusercontent.com/endLoads/pl-lm/refs/heads/main/';
+    var GITHUB_USER = 'endLoads';
+    var GITHUB_REPO = 'pl-lm';
+    var BRANCH = 'main';
     var CORE_FILE = 'cubox.js'; 
     // -----------------
 
+    // Используем jsDelivr CDN - он отдает правильный MIME-type (application/javascript)
+    // Формат: https://cdn.jsdelivr.net/gh/USER/REPO@BRANCH/FILE
+    var cdnUrl = 'https://cdn.jsdelivr.net/gh/' + GITHUB_USER + '/' + GITHUB_REPO + '@' + BRANCH + '/' + CORE_FILE;
+    
+    // Добавляем timestamp для сброса кэша CDN (jsDelivr кэширует жестко)
     var timestamp = new Date().getTime();
-    var url = REPO_ROOT + CORE_FILE + '?v=' + timestamp;
+    var url = cdnUrl + '?t=' + timestamp;
 
-    console.log('[Loader] Loading script:', url);
+    console.log('[Loader] Loading via CDN:', url);
 
-    // Используем классический метод вставки скрипта
-    // Он НЕ подвержен CORS блокировкам (Status: 0)
     var script = document.createElement('script');
     script.type = 'text/javascript';
     script.src = url;
@@ -23,20 +28,18 @@
     };
     
     script.onerror = function() {
-        console.error('[Loader] Failed to load script (Network error)');
-        // В случае ошибки пробуем запасной вариант через прокси
-        loadViaProxy();
+        console.error('[Loader] Failed to load from CDN, trying Raw fallback...');
+        loadFallback();
     };
 
     document.body.appendChild(script);
 
-    // Запасной план: загрузка через CORS-прокси (если GitHub заблокирован провайдером)
-    function loadViaProxy() {
-        console.log('[Loader] Trying proxy...');
-        var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-        var proxyScript = document.createElement('script');
-        proxyScript.src = proxyUrl;
-        document.body.appendChild(proxyScript);
+    // Запасной план: Raw GitHub (если CDN упал)
+    function loadFallback() {
+        var rawUrl = 'https://raw.githubusercontent.com/' + GITHUB_USER + '/' + GITHUB_REPO + '/' + BRANCH + '/' + CORE_FILE + '?v=' + timestamp;
+        var fallbackScript = document.createElement('script');
+        fallbackScript.src = rawUrl;
+        document.body.appendChild(fallbackScript);
     }
 
 })();
