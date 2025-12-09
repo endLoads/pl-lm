@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'CUB OFF v6.0 (Sniper)';
+    var PLUGIN_VERSION = 'CUB OFF v7.0 (Total Killer)';
 
     // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
@@ -15,7 +15,7 @@
     };
     window.lampa_settings = _cleanSettings;
 
-    // 2. CSS (Только визуал)
+    // 2. CSS
     function injectCleanerCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
@@ -40,54 +40,32 @@
         document.body.appendChild(style);
     }
 
-    // 3. SNIPER TIME HACK (Точечное ускорение)
-    var isSniperActive = false;
-    var sniperTimer = null;
-    var originalSetTimeout = window.setTimeout; // Сохраняем чистый таймер
-
-    function activateSniper() {
-        // console.log('[Sniper] ON');
-        isSniperActive = true;
+    // 3. БЕЗУСЛОВНЫЙ TIME KILLER (Работает всегда)
+    function hackTimeouts() {
+        var originalSetTimeout = window.setTimeout;
         
-        if (sniperTimer) clearTimeout(sniperTimer);
-        
-        // Выключаем снайпера через 4 секунды.
-        // Используем originalSetTimeout, чтобы хак не ускорил сам себя!
-        sniperTimer = originalSetTimeout(function() {
-            // console.log('[Sniper] OFF');
-            isSniperActive = false;
-        }, 4000);
-    }
-
-    function setupTimeHack() {
-        // Переопределяем глобальный таймер
         window.setTimeout = function(func, delay) {
-            
-            // ЛОГИКА:
-            // Ускоряем ТОЛЬКО если активен снайпер И задержка > 2000мс (реклама)
-            if (isSniperActive && delay > 2000 && delay < 9000) {
-                return originalSetTimeout(func, 1); // Мгновенно!
+            // Если таймер похож на рекламный (2.5 - 9 сек)
+            // Мы просто ускоряем его ВСЕГДА. Без условий. Без таймеров отключения.
+            if (delay > 2500 && delay < 9000) {
+                return originalSetTimeout(func, 1); 
             }
-            
-            // Иначе (интерфейс плеера, системные задержки) - работаем как обычно
             return originalSetTimeout(func, delay);
         };
-
-        // СЛУШАТЕЛЬ ЗАПУСКА
-        // Как только Lampa хочет открыть плеер -> ВРУБАЕМ СНАЙПЕРА
-        Lampa.Listener.follow('player', function(e) {
-            if(e.type === 'start' || e.type === 'play') {
-                activateSniper();
-            }
-        });
-        
-        // На случай, если событие 'ad' пролетит отдельно
-        Lampa.Listener.follow('ad', function(e) {
-            activateSniper();
-        });
     }
 
-    // 4. UI ИНДИКАТОР
+    // 4. ДОПОЛНИТЕЛЬНАЯ ЗАЧИСТКА
+    function forcePlay() {
+        setInterval(function() {
+            var adLayer = $('.player-advertising, .layer--advertising');
+            if (adLayer.length) {
+                if (Lampa.Player && Lampa.Player.trigger) Lampa.Player.trigger('ad_end');
+                adLayer.remove();
+            }
+        }, 500);
+    }
+
+    // 5. UI
     function injectInfo() {
         var observer = new MutationObserver(function(mutations) {
             var settingsBox = document.querySelector('.settings__content');
@@ -104,7 +82,8 @@
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        setupTimeHack(); // <--- Запуск системы снайпера
+        hackTimeouts(); // <--- Убийца времени (постоянный)
+        forcePlay();
         injectInfo();
     }
 
