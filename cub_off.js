@@ -1,9 +1,9 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'CUB OFF v13.0 (Premium Fake)';
+    var PLUGIN_VERSION = 'CUB OFF v15.0 (Anti-Freeze)';
 
-    // 1. КОНФИГУРАЦИЯ
+    // 1. CONFIG
     window.lampa_settings = {
         lang: 'ru', lang_use: true, read_only: false,
         account_use: true, account_sync: true, socket_use: true,
@@ -22,6 +22,13 @@
             .settings--account-premium, .open--notice, .selectbox-item__lock 
             { display: none !important; }
             .button--subscribe { display: none !important; }
+            .player-advertising, #oframe_player_advertising, .layer--advertising,
+            .ad-preroll-container, .ad-preroll
+            {
+                opacity: 0 !important; visibility: hidden !important;
+                z-index: -9999 !important; pointer-events: none !important;
+                width: 0 !important; height: 0 !important;
+            }
             .cub-off-badge {
                 width: 100%; text-align: center; padding: 15px; opacity: 0.5; 
                 font-size: 1.1em; color: #fff; margin-top: 20px; 
@@ -31,60 +38,53 @@
         document.body.appendChild(style);
     }
 
-    // 3. ПРЕМИУМ-ВЗЛОМ (Самое важное)
-    function mockPremium() {
-        // Ждем, пока загрузится Account класс
-        var attempt = 0;
-        var interval = setInterval(function() {
-            if (typeof Account !== 'undefined' || typeof Lampa.Account !== 'undefined') {
-                
-                console.log('[CUB OFF] Взламываем Account...');
-                
-                // Функция-обманка
-                var fakePremium = function() { return true; };
-                
-                // Пробуем все варианты, где может лежать аккаунт
-                if (window.Account) window.Account.hasPremium = fakePremium;
-                if (window.Account1) window.Account1.hasPremium = fakePremium; // В min файле он Account1
-                if (Lampa.Account) Lampa.Account.hasPremium = fakePremium;
-                
-                // Также ломаем Personal.confirm (на всякий случай)
-                if (window.Personal) window.Personal.confirm = fakePremium;
-                if (Lampa.Personal) Lampa.Personal.confirm = fakePremium;
-
-                // Также ставим флаг в профиле
-                if (Lampa.Storage) {
-                    var profile = Lampa.Storage.get('account', {});
-                    if (!profile.premium) {
-                        profile.premium = true; // Виртуально ставим премиум
-                        // Не сохраняем в Storage.set, чтобы не портить реальные данные на сервере,
-                        // но в памяти держим
-                    }
-                }
-
-                clearInterval(interval);
-            }
-            
-            attempt++;
-            if (attempt > 100) clearInterval(interval); // 10 секунд ожидания
-        }, 100);
-    }
-    
-    // 4. ЗАПАСНОЙ ПЛАН (Перехват таймеров) - ЕСЛИ ПРЕМИУМ НЕ СРАБОТАЕТ
-    // Но теперь мы точно знаем, что задержка 3500мс
-    function killPrerollTimer() {
+    // 3. УБИЙЦА ТАЙМЕРОВ (Усиленный)
+    function killPrerollTimers() {
         var originalSetTimeout = window.setTimeout;
+        
         window.setTimeout = function(func, delay) {
-            // Если таймер 3500ms (это точно преролл из app.min.js)
-            if (delay === 3500 || delay === 3600) {
-                 // console.log('[CUB OFF] Убит таймер преролла 3500ms');
+            // В коде задержка ровно 3500.
+            // Но мы берем диапазон на случай микро-изменений
+            if (delay >= 3400 && delay <= 3600) {
+                 // console.log('[CUB OFF] Killed 3.5s timer');
+                 return originalSetTimeout(func, 1);
+            }
+            // Также убиваем 5000 (на всякий случай)
+            if (delay === 5000) {
                  return originalSetTimeout(func, 1);
             }
             return originalSetTimeout(func, delay);
         };
     }
+    
+    // 4. ВЗЛОМ АККАУНТА (НОВЫЙ МЕТОД)
+    // Мы переопределяем defineProperty, чтобы Лампа не могла заблокировать hasPremium
+    function preventAccountFreeze() {
+        var originalDefineProperty = Object.defineProperty;
+        
+        Object.defineProperty = function(obj, prop, descriptor) {
+            // Если Лампа пытается заморозить hasPremium
+            if (prop === 'hasPremium') {
+                // console.log('[CUB OFF] Prevented hasPremium freeze');
+                descriptor.value = function() { return true; }; // Наша функция
+                descriptor.writable = true; // Разрешаем перезапись
+                descriptor.configurable = true;
+            }
+            return originalDefineProperty(obj, prop, descriptor);
+        };
+    }
+    
+    // 5. ОЧИСТКА DOM
+    function forceCleaner() {
+        setInterval(function() {
+            var ads = document.querySelectorAll('.ad-preroll, .player-advertising');
+            for(var i=0; i<ads.length; i++) {
+                ads[i].remove();
+            }
+        }, 500);
+    }
 
-    // 5. UI
+    // 6. UI
     function injectInfo() {
         var observer = new MutationObserver(function(mutations) {
             var settingsBox = document.querySelector('.settings__content');
@@ -99,14 +99,19 @@
     }
 
     function startPlugin() {
-        localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
+        try {
+            var time = new Date().getTime();
+            localStorage.setItem("region", JSON.stringify({code: "uk", time: time}));
+        } catch(e) {}
+        
+        preventAccountFreeze(); // <--- Запускаем перехватчик защиты
         injectCleanerCSS();
-        killPrerollTimer(); // <--- Убиваем конкретный таймер 3500
-        mockPremium();      // <--- Подделываем премиум
+        killPrerollTimers();
+        forceCleaner();
         injectInfo();
     }
 
-    if (window.appready) startPlugin();
-    else Lampa.Listener.follow("app", function (e) { if (e.type == "ready") startPlugin(); });
+    // Запускаем как можно раньше!
+    startPlugin(); 
 
 })();
