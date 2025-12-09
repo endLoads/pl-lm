@@ -4,26 +4,49 @@
     // --- НАСТРОЙКИ ---
     var GITHUB_USER = 'endLoads';
     var GITHUB_REPO = 'pl-lm';
-    var BRANCH = 'main';
     var CORE_FILE = 'cubox.js'; 
     // -----------------
 
-    // Грузим через CDN (обход блокировок)
-    var cdnUrl = 'https://cdn.jsdelivr.net/gh/' + GITHUB_USER + '/' + GITHUB_REPO + '@' + BRANCH + '/' + CORE_FILE;
-    var timestamp = new Date().getTime();
-    var url = cdnUrl + '?t=' + timestamp;
+    console.log('[Loader] Requesting fresh core via API...');
 
-    console.log('[Loader] Loading Core:', url);
+    // Используем API. Оно отдает JSON, но контент внутри закодирован в Base64.
+    // API практически не кэшируется по сравнению с Raw/CDN.
+    var apiUrl = 'https://api.github.com/repos/' + GITHUB_USER + '/' + GITHUB_REPO + '/contents/' + CORE_FILE + '?ref=main&_t=' + Date.now();
 
-    var script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.src = url;
-    script.async = true;
-    
-    script.onerror = function() {
-        console.error('[Loader] Failed to load Core! Check if cubox.js is in the root of the repo.');
-    };
+    Lampa.Network.silent(apiUrl, function(data) {
+        if (data && data.content) {
+            try {
+                // Декодируем Base64 (встроенная функция браузера или Лампы)
+                // atob работает с латиницей, для кириллицы нужен фикс
+                var code = decodeURIComponent(escape(window.atob(data.content.replace(/\s/g, ''))));
+                
+                // Запускаем код
+                var script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.innerHTML = code;
+                document.body.appendChild(script);
+                
+                console.log('[Loader] Core updated & started successfully!');
+                Lampa.Noty.show('Cubox: Core Updated');
+            } catch (e) {
+                console.error('[Loader] Decode error:', e);
+                // Если не вышло через API, пробуем запасной вариант (CDN)
+                loadFallback();
+            }
+        } else {
+            loadFallback();
+        }
+    }, function() {
+        console.error('[Loader] API Fail');
+        loadFallback();
+    });
 
-    document.body.appendChild(script);
+    function loadFallback() {
+        console.log('[Loader] Using CDN fallback...');
+        var url = 'https://cdn.jsdelivr.net/gh/' + GITHUB_USER + '/' + GITHUB_REPO + '@main/' + CORE_FILE + '?t=' + Date.now();
+        var script = document.createElement('script');
+        script.src = url;
+        document.body.appendChild(script);
+    }
 
 })();
