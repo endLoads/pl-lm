@@ -54,10 +54,11 @@
         });
     }
 
-    // Меню
+        // Меню
     function addMenu() {
+        // УБРАЛИ data-component="...", добавили класс cubox-menu-item
         var field = $(`
-            <div class="settings-folder selector" data-component="cubox_store">
+            <div class="settings-folder selector cubox-menu-item">
                 <div class="settings-folder__icon">
                     <svg width="24px" height="24px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -76,16 +77,23 @@
                     var scrollLayer = $('.settings__content .scroll__content');
                     if (scrollLayer.length) {
                         clearInterval(timer);
+                        
+                        // Удаляем старую кнопку (если она осталась от прошлого открытия), чтобы не дублировалась
+                        scrollLayer.find('.cubox-menu-item').remove();
+
                         var first = scrollLayer.find('.settings-folder').first();
+                        
+                        // Заново создаем обработчик, так как при .remove() он теряется
+                        field.off('hover:enter click').on('hover:enter click', openStore);
+
                         if (first.length) first.before(field);
                         else scrollLayer.append(field);
-                        
-                        field.on('hover:enter', openStore);
                     }
                 }, 50);
             }
         });
     }
+
 
     function openStore() {
         Lampa.Loading.start(function(){ Lampa.Loading.stop(); });
