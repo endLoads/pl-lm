@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'CUB OFF v9.0 (Interactive)';
+    var PLUGIN_VERSION = 'CUB OFF v10.0 (God Mode)';
 
     // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
@@ -40,65 +40,85 @@
         document.body.appendChild(style);
     }
 
-    // 3. ИНТЕРАКТИВНЫЙ TIME KILLER
-    var isKillerPaused = false;
+    // 3. GOD MODE TIME KILLER
+    var isGodMode = false;      // Если true - ускоряем ВСЕГДА (игнорируем паузу)
+    var isKillerPaused = false; // Если true - не ускоряем (если не GodMode)
     var pauseTimer = null;
+    var godTimer = null;
 
-    // Функция "Пауза убийцы" (вызывается при действиях пользователя)
-    function pauseKiller() {
-        // console.log('[Interactive] Пользователь активен -> Пауза ускорения');
-        isKillerPaused = true;
+    function activateGodMode() {
+        // console.log('[GodMode] ON (2 sec)');
+        isGodMode = true;
         
-        if (pauseTimer) clearTimeout(pauseTimer);
+        if (godTimer) clearTimeout(godTimer);
         
-        // Возвращаем режим убийцы через 6 секунд бездействия
-        // Используем originalSetTimeout (который мы сохраним ниже)
+        // Через 3 секунды выключаем GodMode
+        // Используем originalSetTimeout из замыкания ниже, но тут нужен трюк
     }
 
     function hackTimeouts() {
         var originalSetTimeout = window.setTimeout;
-        
-        // Переопределяем паузу, чтобы использовать оригинал
+
+        // Таймер для выключения GodMode
+        var stopGodMode = function() {
+            if (godTimer) clearTimeout(godTimer);
+            godTimer = originalSetTimeout(function() {
+                // console.log('[GodMode] OFF -> Interactive Mode');
+                isGodMode = false;
+            }, 3000); // 3 секунды жесткого ускорения
+        };
+
+        // Таймер для паузы от кликов
         var startPauseTimer = function() {
             if (pauseTimer) clearTimeout(pauseTimer);
             pauseTimer = originalSetTimeout(function() {
-                // console.log('[Interactive] Бездействие -> Включаем ускорение');
                 isKillerPaused = false;
             }, 6000);
         };
 
+        // Перехват кликов
+        var userAction = function() {
+            // Если включен GodMode - игнорируем клики пользователя!
+            if (isGodMode) return;
+            
+            // Иначе - ставим на паузу
+            isKillerPaused = true;
+            startPauseTimer();
+        };
+
         // Хакнутый таймер
         window.setTimeout = function(func, delay) {
-            // Если режим НЕ на паузе И задержка похожа на рекламную (2.5 - 9 сек)
-            if (!isKillerPaused && delay > 2500 && delay < 9000) {
-                return originalSetTimeout(func, 1); // Ускоряем
+            // ЛОГИКА:
+            // 1. Если GodMode -> УСКОРЯЕМ (реклама при старте)
+            // 2. Иначе, если НЕ Пауза И задержка > 2500 -> УСКОРЯЕМ (реклама посреди фильма)
+            
+            if (isGodMode && delay > 1000) {
+                 return originalSetTimeout(func, 1);
             }
+            
+            if (!isGodMode && !isKillerPaused && delay > 2500 && delay < 9000) {
+                 return originalSetTimeout(func, 1);
+            }
+            
             return originalSetTimeout(func, delay);
         };
 
-        // СЛУШАТЕЛИ АКТИВНОСТИ (Самое важное!)
-        // Ловим любые нажатия на пульте или экране
-        window.addEventListener('keydown', function() {
-            pauseKiller();
-            startPauseTimer();
-        }, true);
+        // Слушатели
+        window.addEventListener('keydown', userAction, true);
+        window.addEventListener('click', userAction, true);
         
-        window.addEventListener('click', function() {
-            pauseKiller();
-            startPauseTimer();
-        }, true);
-        
-        window.addEventListener('mousemove', function() {
-             // Можно добавить и мышь, но осторожно (будет постоянно парить)
-             // Лучше только клики
-        }, true);
-        
-        // Также слушаем события Лампы (появление контроллера)
-        Lampa.Listener.follow('toggle', function(e) {
-            if(e.name === 'select' || e.name === 'enter') {
-                pauseKiller();
-                startPauseTimer();
+        // Слушаем старт плеера -> ВКЛЮЧАЕМ GOD MODE
+        Lampa.Listener.follow('player', function(e) {
+            if(e.type === 'start' || e.type === 'play') {
+                activateGodMode();
+                stopGodMode(); // Запускаем таймер отключения
             }
+        });
+        
+        // На всякий случай ловим событие рекламы
+        Lampa.Listener.follow('ad', function() {
+            activateGodMode();
+            stopGodMode();
         });
     }
 
@@ -130,7 +150,7 @@
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        hackTimeouts(); // <--- Интерактивный режим
+        hackTimeouts(); 
         forcePlay();
         injectInfo();
     }
