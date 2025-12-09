@@ -1,172 +1,170 @@
 (function () {
-  'use strict';
+    'use strict';
 
-  // ========================================================================
-  // 1. НАСТРОЙКИ (Config)
-  // Безопасная конфигурация для Lampa 2024-2025
-  // ========================================================================
-  var _cleanSettings = {
-    // --- Основные ---
-    lang: 'ru',
-    lang_use: true,
-    read_only: false,
-    
-    // --- Аккаунт и CUB (Оставляем включенным для истории) ---
-    account_use: true,
-    account_sync: true,  
-    socket_use: true,    
-    
-    // --- Плагины ---
-    plugins_use: true,
-    plugins_store: true,
-    
-    // --- Контент ---
-    torrents_use: true,
-    iptv: false,
-    feed: false,      
-    push_state: true, 
-
-    // --- Блокировки ---
-    white_use: false, 
-    dcma: false,      
-    
-    // --- Developer (Чтобы не было ошибок при старте) ---
-    developer: {
-      fps: false,
-      log: false,
-      status: false,
-      active: false
-    },
-
-    // --- Отключение функций (Disable Features) ---
-    disable_features: {
-      dmca: true,        // Скрыть "удалено правообладателем"
-      ads: true,         // Глобальное отключение рекламы
-      trailers: false,   
-      reactions: false,  
-      discuss: false,    
-      ai: true,          
-      subscribe: true,   // Скрыть меню "Подписка"
-      blacklist: true,   
-      persons: true      
-    }
-  };
-
-  // Применяем настройки
-  window.lampa_settings = _cleanSettings;
-
-
-  // ========================================================================
-  // 2. CSS ПАТЧ (Visual Cleaner)
-  // Скрывает интерфейсный мусор и рекламные слои
-  // ========================================================================
-  function injectCleanerCSS() {
-    var style = document.createElement("style");
-    style.innerHTML = `
-      /* Скрываем кнопки покупки и баннеры */
-      .button--subscribe, 
-      .settings--account-premium,
-      .ad-server,
-      .ad-server-resize,
-      div[class*="ad-server"],
-      .selectbox-item__lock,
-      .black-friday__button,
-      .christmas__button,
-      .open--notice,
-      .card-promo, 
-      .promo-block,
-      [data-component="ad"] 
-      { 
-          display: none !important; 
-          width: 0 !important; 
-          height: 0 !important; 
-          pointer-events: none !important;
-      }
-
-      /* Скрываем серые экраны "Реклама" поверх плеера */
-      #oframe_player_advertising,
-      .player-advertising,
-      .ad-preroll-container,
-      div[id^="ad_"],
-      div[class*="advertising"],
-      .layer--advertising
-      {
-          display: none !important;
-          opacity: 0 !important;
-          z-index: -9999 !important;
-          pointer-events: none !important;
-      }
-    `;
-    document.body.appendChild(style);
-  }
-
-
-  // ========================================================================
-  // 3. ПЕРЕХВАТЧИК ЛОГИКИ (Logic Killer)
-  // Подменяет функции вызова рекламы, чтобы они сразу завершались
-  // ========================================================================
-  function killAdsLogic() {
-      console.log('[Plugin] Запуск перехватчика рекламы...');
-      
-      // 1. Подмена стандартного модуля рекламы Lampa
-      if (Lampa.Ad) {
-          Lampa.Ad.launch = function (data) {
-              console.log('[Plugin] Lampa.Ad.launch заблокирован');
-              // Сразу сообщаем плееру, что реклама "просмотрена"
-              if (data && data.callback) data.callback();
-          };
-      }
-      
-      // 2. Постоянная очистка DOM (на случай динамической подгрузки)
-      setInterval(function() {
-          // Ищем элементы с текстом "Реклама" или классом advertising
-          var ads = $('.player-advertising, .layer--advertising');
-          
-          if (ads.length > 0) {
-              console.log('[Plugin] Найден рекламный слой - удаляем');
-              ads.remove();
-              
-              // Если видео на паузе - запускаем
-              var video = $('video');
-              if (video.length > 0 && video[0].paused) {
-                  video[0].play();
-              }
-          }
-          
-          // Удаляем текстовые плашки "Реклама"
-          $('div').filter(function() {
-             return $(this).text().trim() === 'Реклама' && $(this).css('position') === 'absolute';
-          }).remove();
-
-      }, 1000); // Проверка каждую секунду
-  }
-
-
-  // ========================================================================
-  // 4. ИНИЦИАЛИЗАЦИЯ (Start)
-  // ========================================================================
-  function startPlugin() {
-    // Хак региона для постеров (UK)
-    var time = new Date().getTime();
-    localStorage.setItem("region", JSON.stringify({code: "uk", time: time}));
-
-    injectCleanerCSS();
-    killAdsLogic();
-    
-    // Дополнительная зачистка при смене экранов
-    Lampa.Listener.follow('activity', function (e) {
-        if (e.type === 'start') {
-            $('.ad-server').remove();
+    // ========================================================================
+    // 1. КОНФИГУРАЦИЯ (Config)
+    // ========================================================================
+    var _cleanSettings = {
+        lang: 'ru',
+        lang_use: true,
+        read_only: false,
+        account_use: true,
+        account_sync: true,
+        socket_use: true,
+        plugins_use: true,
+        plugins_store: true,
+        torrents_use: true,
+        iptv: false,
+        feed: false,
+        push_state: true,
+        white_use: false,
+        dcma: false,
+        developer: { fps: false, log: false, status: false, active: false },
+        disable_features: {
+            dmca: true,
+            ads: true,         // Главный рубильник
+            trailers: false,
+            reactions: false,
+            discuss: false,
+            ai: true,
+            subscribe: true,
+            blacklist: true,
+            persons: true
         }
-    });
-  }
+    };
+    window.lampa_settings = _cleanSettings;
 
-  if (window.appready) {
-    startPlugin();
-  } else {
-    Lampa.Listener.follow("app", function (e) {
-      if (e.type == "ready") startPlugin();
-    });
-  }
+    // ========================================================================
+    // 2. CSS-БЛОКИРОВКА (Визуальный слой)
+    // ========================================================================
+    function injectUltimateCSS() {
+        var style = document.createElement("style");
+        style.innerHTML = `
+            /* Скрываем всё рекламное */
+            .ad-server, .ad-server-resize, [data-component="ad"], .card-promo,
+            .button--subscribe, .settings--account-premium, .open--notice,
+            .selectbox-item__lock 
+            { display: none !important; }
+
+            /* УБИВАЕМ СЕРЫЙ ЭКРАН В ПЛЕЕРЕ */
+            /* Блокируем любые оверлеи поверх видео, кроме контролов */
+            .player-advertising, 
+            #oframe_player_advertising,
+            .layer--advertising,
+            .ad-preroll-container,
+            div[class*="advertising"],
+            div[id*="advertising"],
+            div[class*="preroll"],
+            .vjs-ad-playing, .vjs-ad-loading 
+            {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                width: 0 !important;
+                height: 0 !important;
+                pointer-events: none !important;
+                z-index: -9999 !important;
+            }
+            
+            /* Если это iframe, делаем его прозрачным для кликов */
+            iframe[src*="ad"] { display: none !important; }
+        `;
+        document.body.appendChild(style);
+    }
+
+    // ========================================================================
+    // 3. БЛОКИРОВКА НА УРОВНЕ ЯДРА (JS Patch)
+    // ========================================================================
+    function patchLampaCore() {
+        console.log('[AdBlock] Patching Lampa Core...');
+
+        // 1. Отключаем модуль рекламы
+        if (Lampa.Ad) {
+            Lampa.Ad.launch = function (data) {
+                console.log('[AdBlock] Lampa.Ad.launch blocked');
+                if (data && data.callback) data.callback(); // Сразу "реклама прошла"
+            };
+        }
+
+        // 2. Патчим плеер (Если реклама вызывается методами плеера)
+        // Перехватываем метод добавления рекламы в плеер
+        if (Lampa.Player) {
+            var originalCallback = Lampa.Player.callback;
+            
+            // Если плеер пытается сообщить о событии рекламы - игнорируем
+            /*
+             Мы не можем легко перехватить внутренние методы плеера, 
+             но можем слушать события и убивать их
+            */
+            Lampa.Player.listener.follow('ad', function(e) {
+                console.log('[AdBlock] Event "ad" detected - destroying');
+                $('.player-advertising').remove();
+                if(Lampa.Player.video && Lampa.Player.video.play) Lampa.Player.video.play();
+            });
+        }
+        
+        // 3. Глобальный перехватчик сообщений (postMessage)
+        // Часто реклама в iframe общается с основным окном
+        window.addEventListener("message", function(event) {
+            if (typeof event.data === 'string' && 
+               (event.data.includes('ad') || event.data.includes('advertising'))) {
+                console.log('[AdBlock] Blocked message:', event.data);
+                event.stopImmediatePropagation();
+            }
+        }, true);
+    }
+
+    // ========================================================================
+    // 4. МУТАЦИОННЫЙ ЩИТ (DOM Defender)
+    // Следит, чтобы рекламный блок не появился в DOM
+    // ========================================================================
+    function startDomDefender() {
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.addedNodes.length) {
+                    mutation.addedNodes.forEach(function(node) {
+                        // Если это HTML элемент
+                        if (node.nodeType === 1) { 
+                            var className = node.className || "";
+                            var idName = node.id || "";
+                            var textContent = node.textContent || "";
+                            
+                            // Проверка по классам и ID
+                            if (
+                                (typeof className === 'string' && className.indexOf('advertising') !== -1) ||
+                                (typeof idName === 'string' && idName.indexOf('advertising') !== -1) ||
+                                (textContent.trim() === 'Реклама')
+                            ) {
+                                console.log('[AdBlock] Removing node:', node);
+                                node.remove(); // Удаляем элемент мгновенно
+                                
+                                // Если видео стояло на паузе - запускаем
+                                var video = document.querySelector('video');
+                                if(video && video.paused) video.play();
+                            }
+                        }
+                    });
+                }
+            });
+        });
+
+        // Следим за всем телом документа
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // ========================================================================
+    // 5. ЗАПУСК
+    // ========================================================================
+    function startPlugin() {
+        // Хак региона
+        localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
+        
+        injectUltimateCSS();
+        patchLampaCore();
+        startDomDefender();
+    }
+
+    if (window.appready) startPlugin();
+    else Lampa.Listener.follow("app", function (e) { if (e.type == "ready") startPlugin(); });
 
 })();
