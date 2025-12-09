@@ -1,9 +1,9 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'v1.6 (Stable)';
+    var PLUGIN_VERSION = 'CUB OFF v2.0';
 
-    // 1. КОНФИГУРАЦИЯ
+    // 1. КОНФИГУРАЦИЯ (Безопасная)
     var _cleanSettings = {
         lang: 'ru', lang_use: true, read_only: false,
         account_use: true, account_sync: true, socket_use: true,
@@ -11,103 +11,95 @@
         iptv: false, feed: false, push_state: true,
         white_use: false, dcma: false,
         developer: { fps: false, log: false, status: false, active: false },
-        disable_features: { dmca: true, ads: true, trailers: false, reactions: false, discuss: false, ai: true, subscribe: true, blacklist: true, persons: true }
+        disable_features: { 
+            dmca: true, ads: true, trailers: false, reactions: false, 
+            discuss: false, ai: true, subscribe: true, blacklist: true, persons: true 
+        }
     };
     window.lampa_settings = _cleanSettings;
 
-    // 2. ЖЕСТКИЙ CSS (Вернул как было, когда работало)
-    function injectCleanerCSS() {
+    // 2. CSS ОЧИСТКА (Безопасная, не ломает плеер)
+    function injectSafeCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
-            .ad-server, [data-component="ad"], .card-promo, .button--subscribe, 
+            /* Скрываем мусор */
+            .ad-server, [data-component="ad"], .card-promo, 
             .settings--account-premium, .open--notice, .selectbox-item__lock 
             { display: none !important; }
+            
+            /* Скрываем кнопку подписки, чтобы заменить её */
+            .button--subscribe { display: none !important; }
 
-            /* Скрываем плеерные оверлеи */
+            /* Скрываем рекламные слои плеера (визуально) */
             .player-advertising, #oframe_player_advertising, .layer--advertising,
-            .ad-preroll-container, div[class*="advertising"], div[id*="advertising"]
+            .ad-preroll-container, div[class*="advertising"]
             {
                 opacity: 0 !important; visibility: hidden !important;
                 z-index: -9999 !important; pointer-events: none !important;
                 width: 0 !important; height: 0 !important;
             }
             
-            /* Индикатор версии в настройках */
-            .settings-footer-version {
-                text-align: center; opacity: 0.3; font-size: 0.8em; margin-top: 20px;
+            /* Стили для нашей плашки версии */
+            .cub-off-badge {
+                display: inline-block;
+                padding: 0.5em 1em;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+                font-size: 0.9em;
+                color: #aaa;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                margin-left: 10px;
             }
         `;
         document.body.appendChild(style);
     }
 
-    // 3. УМНЫЙ ТАЙМ-КИЛЛЕР (Баланс между скоростью и интерфейсом)
-    function hackTimeouts() {
-        var originalSetTimeout = window.setTimeout;
-        
-        window.setTimeout = function(func, delay) {
-            // Если есть рекламный слой - ускоряем БЕЗЖАЛОСТНО
-            if (document.querySelector('.player-advertising, .layer--advertising, #oframe_player_advertising, div[class*="advertising"]')) {
-                 if (delay > 1000 && delay < 20000) {
-                     return originalSetTimeout(func, 1);
-                 }
-            }
-            // Если таймер подозрительно похож на рекламный (ровно 5 или 15 сек) - тоже режем
-            // (даже если слоя еще нет в DOM, иногда скрипт запускается раньше)
-            if (delay === 5000 || delay === 15000 || delay === 10000) {
-                 return originalSetTimeout(func, 1);
-            }
-
-            return originalSetTimeout(func, delay);
-        };
-    }
-
-    // 4. СЕТЕВОЙ ПЕРЕХВАТЧИК (Обязателен)
-    function startNetworkInterceptor() {
-        var blockList = ['vast', 'preroll', 'advertising', 'yandex.ru/ads', 'googleads', 'doubleclick'];
-        
-        var originalOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function (method, url) {
-            if (typeof url === 'string') {
-                for (var i = 0; i < blockList.length; i++) {
-                    if (url.indexOf(blockList[i]) !== -1) {
-                        this.onerror = function() {}; // Вызываем ошибку сети
-                        return originalOpen.call(this, method, 'http://0.0.0.0'); 
-                    }
-                }
-            }
-            return originalOpen.apply(this, arguments);
-        };
-    }
-
-    // 5. ИНТЕГРАЦИЯ ВЕРСИИ В НАСТРОЙКИ
-    function injectVersionInfo() {
-        // Мы используем листенер, чтобы поймать момент открытия настроек
+    // 3. ЗАМЕНА РЕКЛАМЫ НА ИНФО (Inject UI)
+    function injectInfo() {
+        // Мы ищем место, где была кнопка подписки или профиль
         Lampa.Listener.follow('activity', function (e) {
             if (e.component === 'settings') {
                 setTimeout(function() {
-                    if (!$('.cub-off-ver').length) {
-                        var ver = $('<div class="cub-off-ver">' + PLUGIN_VERSION + '</div>');
-                        ver.css({
-                            'text-align': 'center',
-                            'opacity': '0.3',
-                            'font-size': '0.9em',
-                            'padding': '10px'
-                        });
-                        // Добавляем в конец списка настроек
-                        $('.settings__content').append(ver);
+                    // Ищем контейнер с кнопками (обычно там кнопка CUB Premium)
+                    var container = $('.settings__header .settings__params'); 
+                    
+                    // Если не нашли, ищем просто в хедере
+                    if (!container.length) container = $('.settings__header');
+
+                    // Проверяем, чтобы не добавить 10 раз
+                    if (!$('.cub-off-badge').length) {
+                        var badge = $('<div class="cub-off-badge">' + PLUGIN_VERSION + '</div>');
+                        container.append(badge);
                     }
-                }, 500);
+                }, 300);
+            }
+            
+            // Также пробуем вставить в меню слева (вместо рекламы)
+            if (e.component === 'head') {
+                 setTimeout(function() {
+                     $('.open--notice').replaceWith('<div class="cub-off-badge" style="margin: 10px">' + PLUGIN_VERSION + '</div>');
+                 }, 500);
             }
         });
     }
 
-    // ЗАПУСК
+    // 4. ПРОСТОЙ УСКОРИТЕЛЬ (Безопасный)
+    // Без взлома таймеров, просто удаляет слой рекламы если он появился
+    function simpleAdKiller() {
+        setInterval(function() {
+            var ad = document.querySelector('.player-advertising, .layer--advertising');
+            if (ad) {
+                ad.remove();
+                if (Lampa.Player && Lampa.Player.trigger) Lampa.Player.trigger('ad_end');
+            }
+        }, 800);
+    }
+
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
-        injectCleanerCSS();
-        startNetworkInterceptor();
-        hackTimeouts(); // <--- Включаем тайм-киллер
-        injectVersionInfo();
+        injectSafeCSS();
+        injectInfo();      // Вставляет версию
+        simpleAdKiller();  // Удаляет рекламу
     }
 
     if (window.appready) startPlugin();
