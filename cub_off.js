@@ -15,6 +15,10 @@
       torrents_use: true,
       white_use: false,
       lang_use: true
+      developer: {
+          fps: false,
+          log: false,
+          status: false
     };
     _0x4e7f98.read_only = false;
     _0x4e7f98.dcma = false;
