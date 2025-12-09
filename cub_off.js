@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'CUB OFF v5.0 (Direct Kill)';
+    var PLUGIN_VERSION = 'CUB OFF v6.0 (Sniper)';
 
     // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
@@ -15,7 +15,7 @@
     };
     window.lampa_settings = _cleanSettings;
 
-    // 2. CSS (Скрываем визуально)
+    // 2. CSS (Только визуал)
     function injectCleanerCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
@@ -24,12 +24,12 @@
             { display: none !important; }
             .button--subscribe { display: none !important; }
 
-            /* Делаем рекламу невидимой, но оставляем в потоке, чтобы JS её нашел */
             .player-advertising, #oframe_player_advertising, .layer--advertising,
             .ad-preroll-container, div[class*="advertising"]
             {
                 opacity: 0 !important; visibility: hidden !important;
                 z-index: -9999 !important; pointer-events: none !important;
+                width: 0 !important; height: 0 !important;
             }
             .cub-off-badge {
                 width: 100%; text-align: center; padding: 15px;
@@ -40,72 +40,54 @@
         document.body.appendChild(style);
     }
 
-    // 3. БЛОКИРОВКА НА УРОВНЕ ЯДРА (Без таймеров)
-    function patchLampaCore() {
-        // Подмена модуля рекламы
-        if (Lampa.Ad) {
-            Lampa.Ad.launch = function (data) {
-                // Сразу говорим "реклама прошла"
-                if (data && data.callback) data.callback();
-            };
-        }
+    // 3. SNIPER TIME HACK (Точечное ускорение)
+    var isSniperActive = false;
+    var sniperTimer = null;
+    var originalSetTimeout = window.setTimeout; // Сохраняем чистый таймер
+
+    function activateSniper() {
+        // console.log('[Sniper] ON');
+        isSniperActive = true;
+        
+        if (sniperTimer) clearTimeout(sniperTimer);
+        
+        // Выключаем снайпера через 4 секунды.
+        // Используем originalSetTimeout, чтобы хак не ускорил сам себя!
+        sniperTimer = originalSetTimeout(function() {
+            // console.log('[Sniper] OFF');
+            isSniperActive = false;
+        }, 4000);
     }
 
-    // 4. АГРЕССИВНЫЙ КИЛЛЕР ПРИ СТАРТЕ
-    function setupKiller() {
-        // Слушаем запуск плеера
+    function setupTimeHack() {
+        // Переопределяем глобальный таймер
+        window.setTimeout = function(func, delay) {
+            
+            // ЛОГИКА:
+            // Ускоряем ТОЛЬКО если активен снайпер И задержка > 2000мс (реклама)
+            if (isSniperActive && delay > 2000 && delay < 9000) {
+                return originalSetTimeout(func, 1); // Мгновенно!
+            }
+            
+            // Иначе (интерфейс плеера, системные задержки) - работаем как обычно
+            return originalSetTimeout(func, delay);
+        };
+
+        // СЛУШАТЕЛЬ ЗАПУСКА
+        // Как только Lampa хочет открыть плеер -> ВРУБАЕМ СНАЙПЕРА
         Lampa.Listener.follow('player', function(e) {
             if(e.type === 'start' || e.type === 'play') {
-                // Запускаем "бешеный" цикл на 5 секунд
-                var attempts = 0;
-                var interval = setInterval(function() {
-                    attempts++;
-                    
-                    // 1. Ищем рекламные слои
-                    var ads = $('.player-advertising, .layer--advertising, #oframe_player_advertising');
-                    
-                    if (ads.length > 0) {
-                        // Нашли! Удаляем!
-                        ads.remove();
-                        // Сообщаем плееру, что всё ок
-                        if (Lampa.Player.trigger) Lampa.Player.trigger('ad_end');
-                        
-                        // Если видео стоит на паузе (из-за рекламы) - включаем
-                        var video = $('video')[0];
-                        if (video && video.paused) {
-                            try { video.play(); } catch(err){}
-                        }
-                    }
-
-                    // 2. Ищем кнопки "Пропустить"
-                    $('.skip-button, .ad-skip-button').click();
-
-                    // Останавливаем через 500 попыток (около 5 сек)
-                    if (attempts > 500) clearInterval(interval);
-                    
-                }, 10); // Проверка каждые 10мс (очень быстро)
+                activateSniper();
             }
+        });
+        
+        // На случай, если событие 'ad' пролетит отдельно
+        Lampa.Listener.follow('ad', function(e) {
+            activateSniper();
         });
     }
 
-    // 5. СЕТЕВОЙ ПЕРЕХВАТЧИК (Для надежности)
-    function startNetworkInterceptor() {
-        var blockList = ['vast', 'preroll', 'advertising', 'yandex.ru/ads', 'googleads'];
-        var originalOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function (method, url) {
-            if (typeof url === 'string') {
-                for (var i = 0; i < blockList.length; i++) {
-                    if (url.indexOf(blockList[i]) !== -1) {
-                        this.onerror = function() {}; 
-                        return originalOpen.call(this, method, 'about:blank'); 
-                    }
-                }
-            }
-            return originalOpen.apply(this, arguments);
-        };
-    }
-
-    // 6. UI
+    // 4. UI ИНДИКАТОР
     function injectInfo() {
         var observer = new MutationObserver(function(mutations) {
             var settingsBox = document.querySelector('.settings__content');
@@ -122,9 +104,7 @@
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        patchLampaCore();        // <--- Патч ядра вместо таймеров
-        setupKiller();           // <--- Быстрый киллер при старте
-        startNetworkInterceptor();
+        setupTimeHack(); // <--- Запуск системы снайпера
         injectInfo();
     }
 
