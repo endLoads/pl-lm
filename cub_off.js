@@ -1,50 +1,20 @@
 (function () {
     'use strict';
-    
-    var PLUGIN_VERSION = 'CUB OFF v11.0 (Logic Hack)';
 
-    // 1. ПОДМЕНА ХРАНИЛИЩА (Главная фишка)
-    function hackStorage() {
-        // Перехватываем метод получения данных
-        var originalGet = Lampa.Storage.get;
-        
-        Lampa.Storage.get = function(name, def) {
-            // Если Лампа спрашивает "когда была реклама?" (ad_timer, advertising_last_time)
-            if (name === 'ad_timer' || name === 'advertising_last_time' || name === 'ad_view_time') {
-                // Отвечаем: "Только что!" (Текущее время)
-                return new Date().getTime();
-            }
-            
-            // Если спрашивает "показывать рекламу?"
-            if (name === 'ad_server' || name === 'advertising') {
-                return false;
-            }
+    var PLUGIN_VERSION = 'CUB OFF v13.0 (Premium Fake)';
 
-            return originalGet.call(this, name, def);
-        };
-        
-        // На всякий случай пишем в localStorage
-        setInterval(function() {
-            var time = new Date().getTime();
-            localStorage.setItem('ad_timer', time);
-            localStorage.setItem('advertising_last_time', time);
-            // Lampa.Storage.set('ad_timer', time); // Дублируем через API
-        }, 5000);
-    }
-
-    // 2. CONFIG (Стандарт)
-    var _cleanSettings = {
-        lang: 'ru', lang_use: true,
+    // 1. КОНФИГУРАЦИЯ
+    window.lampa_settings = {
+        lang: 'ru', lang_use: true, read_only: false,
         account_use: true, account_sync: true, socket_use: true,
         plugins_use: true, plugins_store: true, torrents_use: true,
         iptv: false, feed: false, push_state: true,
         white_use: false, dcma: false,
         developer: { fps: false, log: false, status: false, active: false },
-        disable_features: { dmca: true, ads: true, subscribe: true, blacklist: true }
+        disable_features: { dmca: true, ads: true, trailers: false, reactions: false, discuss: false, ai: true, subscribe: true, blacklist: true, persons: true }
     };
-    window.lampa_settings = _cleanSettings;
 
-    // 3. CSS (Убираем визуальный мусор)
+    // 2. CSS
     function injectCleanerCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
@@ -52,26 +22,66 @@
             .settings--account-premium, .open--notice, .selectbox-item__lock 
             { display: none !important; }
             .button--subscribe { display: none !important; }
-            .player-advertising, #oframe_player_advertising { display: none !important; }
-            
             .cub-off-badge {
-                width: 100%; text-align: center; padding: 15px;
-                opacity: 0.5; font-size: 1.1em; color: #fff;
-                margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);
+                width: 100%; text-align: center; padding: 15px; opacity: 0.5; 
+                font-size: 1.1em; color: #fff; margin-top: 20px; 
+                border-top: 1px solid rgba(255,255,255,0.1);
             }
         `;
         document.body.appendChild(style);
     }
+
+    // 3. ПРЕМИУМ-ВЗЛОМ (Самое важное)
+    function mockPremium() {
+        // Ждем, пока загрузится Account класс
+        var attempt = 0;
+        var interval = setInterval(function() {
+            if (typeof Account !== 'undefined' || typeof Lampa.Account !== 'undefined') {
+                
+                console.log('[CUB OFF] Взламываем Account...');
+                
+                // Функция-обманка
+                var fakePremium = function() { return true; };
+                
+                // Пробуем все варианты, где может лежать аккаунт
+                if (window.Account) window.Account.hasPremium = fakePremium;
+                if (window.Account1) window.Account1.hasPremium = fakePremium; // В min файле он Account1
+                if (Lampa.Account) Lampa.Account.hasPremium = fakePremium;
+                
+                // Также ломаем Personal.confirm (на всякий случай)
+                if (window.Personal) window.Personal.confirm = fakePremium;
+                if (Lampa.Personal) Lampa.Personal.confirm = fakePremium;
+
+                // Также ставим флаг в профиле
+                if (Lampa.Storage) {
+                    var profile = Lampa.Storage.get('account', {});
+                    if (!profile.premium) {
+                        profile.premium = true; // Виртуально ставим премиум
+                        // Не сохраняем в Storage.set, чтобы не портить реальные данные на сервере,
+                        // но в памяти держим
+                    }
+                }
+
+                clearInterval(interval);
+            }
+            
+            attempt++;
+            if (attempt > 100) clearInterval(interval); // 10 секунд ожидания
+        }, 100);
+    }
     
-    // 4. ПОДМЕНА МОДУЛЯ РЕКЛАМЫ (Если Storage Hack не сработает)
-    function patchAdModule() {
-        if (Lampa.Ad) {
-             // Полностью ломаем логику запуска
-             Lampa.Ad.launch = function(data) {
-                 console.log('Ad blocked by Logic Hack');
-                 if(data.callback) data.callback();
-             }
-        }
+    // 4. ЗАПАСНОЙ ПЛАН (Перехват таймеров) - ЕСЛИ ПРЕМИУМ НЕ СРАБОТАЕТ
+    // Но теперь мы точно знаем, что задержка 3500мс
+    function killPrerollTimer() {
+        var originalSetTimeout = window.setTimeout;
+        window.setTimeout = function(func, delay) {
+            // Если таймер 3500ms (это точно преролл из app.min.js)
+            if (delay === 3500 || delay === 3600) {
+                 // console.log('[CUB OFF] Убит таймер преролла 3500ms');
+                 return originalSetTimeout(func, 1);
+            }
+            return originalSetTimeout(func, delay);
+        };
     }
 
     // 5. UI
@@ -89,9 +99,10 @@
     }
 
     function startPlugin() {
+        localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        hackStorage();    // <--- Логический взлом
-        patchAdModule();
+        killPrerollTimer(); // <--- Убиваем конкретный таймер 3500
+        mockPremium();      // <--- Подделываем премиум
         injectInfo();
     }
 
