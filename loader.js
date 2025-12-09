@@ -2,7 +2,7 @@
     'use strict';
     
     // --- НАСТРОЙКИ ---
-    var REPO_ROOT = 'https://raw.githubusercontent.com/D1G1T4L-W0RLD/Lampa-plugins/main/';
+    var REPO_ROOT = 'https://raw.githubusercontent.com/endLoads/pl-lm/refs/heads/main/';
     var CORE_FILE = 'cubox.js'; 
     // -----------------
 
