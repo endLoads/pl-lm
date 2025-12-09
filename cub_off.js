@@ -1,6 +1,7 @@
 (function () {
     'use strict';
 
+    // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
         lang: 'ru', lang_use: true, read_only: false,
         account_use: true, account_sync: true, socket_use: true,
@@ -12,90 +13,98 @@
     };
     window.lampa_settings = _cleanSettings;
 
-    function injectUltimateCSS() {
+    // 2. CSS (Скрываем визуально)
+    function injectCleanerCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
-            .ad-server, .ad-server-resize, [data-component="ad"], .card-promo,
-            .button--subscribe, .settings--account-premium, .open--notice,
-            .selectbox-item__lock { display: none !important; }
+            .ad-server, [data-component="ad"], .card-promo, .button--subscribe, 
+            .settings--account-premium, .open--notice, .selectbox-item__lock 
+            { display: none !important; }
 
-            /* Делаем рекламу невидимой, но доступной для кликов скрипта */
             .player-advertising, #oframe_player_advertising, .layer--advertising,
-            .ad-preroll-container, div[class*="advertising"], div[id*="advertising"],
-            div[class*="preroll"] {
-                opacity: 0 !important;
-                z-index: -9999 !important;
-                pointer-events: none !important;
-                visibility: hidden !important; 
+            .ad-preroll-container, div[class*="advertising"]
+            {
+                opacity: 0 !important; visibility: hidden !important;
+                z-index: -9999 !important; pointer-events: none !important;
             }
         `;
         document.body.appendChild(style);
     }
 
-    // --- ГЛАВНАЯ ФИШКА: МГНОВЕННЫЙ ПРОПУСК ---
-    function startInstantSkip() {
-        // Таймер, который молотит очень часто (раз в 100мс)
-        setInterval(function() {
-            // 1. Ищем и жмем кнопку "Пропустить" (skip button)
-            var skipButtons = $('.skip-button, .ad-skip-button, .videoAdUiSkipButton, [class*="skip"]');
-            if (skipButtons.length) {
-                console.log('[AdSkip] Нажимаем кнопку пропуска');
-                skipButtons.click();
-            }
-
-            // 2. Ищем слой рекламы
-            var adLayer = $('.player-advertising, .layer--advertising, #oframe_player_advertising, .ad-preroll-container');
-            
-            if (adLayer.length) {
-                console.log('[AdSkip] Найден слой рекламы, пытаемся убить...');
-                
-                // А. Пытаемся удалить слой (жестко)
-                adLayer.remove();
-                
-                // Б. Пытаемся пнуть видео
-                var video = $('video')[0];
-                if (video) {
-                    // Если это рекламное видео (короткое) - ставим в конец
-                    if (video.duration < 60) {
-                        video.currentTime = video.duration;
-                    }
-                    // Если видео на паузе - запускаем
-                    if (video.paused) video.play();
-                }
-                
-                // В. Сообщаем Лампе, что реклама всё (если есть такой метод)
-                if (Lampa.Player && Lampa.Player.trigger) {
-                     Lampa.Player.trigger('ad_end'); 
-                }
-            }
-
-        }, 100); 
-    }
-
-    function patchLampaCore() {
-        if (Lampa.Ad) {
-            Lampa.Ad.launch = function (data) {
-                if (data && data.callback) data.callback();
-            };
-        }
-        // Перехватываем создание таймера рекламы
+    // 3. ВЗЛОМ ТАЙМЕРОВ (TIME KILLER) - ГЛАВНОЕ ИСПРАВЛЕНИЕ
+    function hackTimeouts() {
+        console.log('[TimeKiller] Перехват таймеров запущен');
+        
         var originalSetTimeout = window.setTimeout;
+        
         window.setTimeout = function(func, delay) {
-            // Если функция похожа на рекламную задержку (обычно 5000мс или 15000мс)
-            if (delay === 5000 || delay === 15000 || delay === 10000) {
-                // Пытаемся понять контекст (сложно, но можно попробовать просто сократить)
-                // Рискованно: может сломать интерфейс.
-                // return originalSetTimeout(func, 100); // Сокращаем до 0.1с
+            // Если таймер ставится на 3-7 секунд (типичное ожидание рекламы)
+            if (delay > 2500 && delay < 7000) {
+                console.log('[TimeKiller] Найден подозрительный таймер (' + delay + 'ms) -> Ускоряем до 1ms');
+                // Заменяем задержку на 1 миллисекунду (мгновенно)
+                return originalSetTimeout(func, 1); 
             }
+            // Все остальные таймеры работают как обычно
             return originalSetTimeout(func, delay);
         };
     }
 
+    // 4. СЕТЕВОЙ БЛОК (Чтобы реклама падала в ошибку сразу)
+    function startNetworkInterceptor() {
+        var blockList = ['vast', 'preroll', 'advertising', 'yandex.ru/ads', 'googleads'];
+        
+        var originalFetch = window.fetch;
+        window.fetch = function(input, init) {
+            var url = (typeof input === 'string') ? input : (input.url || '');
+            for (var i = 0; i < blockList.length; i++) {
+                if (url.indexOf(blockList[i]) !== -1) return Promise.reject('AdBlocked');
+            }
+            return originalFetch.apply(this, arguments);
+        };
+        
+        var originalOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function (method, url) {
+            if (typeof url === 'string') {
+                for (var i = 0; i < blockList.length; i++) {
+                    if (url.indexOf(blockList[i]) !== -1) {
+                        // Важно: не просто блокируем, а вызываем ошибку, чтобы сработал таймер восстановления
+                        this.onerror = function() {}; 
+                        return originalOpen.call(this, method, 'http://0.0.0.0'); 
+                    }
+                }
+            }
+            return originalOpen.apply(this, arguments);
+        };
+    }
+
+    // 5. ПРИНУДИТЕЛЬНЫЙ СТАРТ ПЛЕЕРА
+    function forcePlay() {
+        setInterval(function() {
+            // Если видим слой рекламы
+            if ($('.player-advertising, .layer--advertising').length) {
+                // Пытаемся сообщить Лампе, что реклама кончилась
+                if (Lampa.Player && Lampa.Player.trigger) Lampa.Player.trigger('ad_end');
+                
+                // Удаляем слой
+                $('.player-advertising, .layer--advertising').remove();
+            }
+            
+            // Если видео есть, но стоит на паузе в начале (0 сек)
+            var video = $('video')[0];
+            if (video && video.paused && video.currentTime < 1) {
+                // Проверяем, не нажимал ли пользователь паузу сам. 
+                // Обычно реклама блокирует воспроизведение. Пытаемся пустить.
+                video.play().catch(function(e){});
+            }
+        }, 500);
+    }
+
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
-        injectUltimateCSS();
-        patchLampaCore();
-        startInstantSkip(); // Запуск "кликера"
+        injectCleanerCSS();
+        hackTimeouts();          // <--- Включаем перехват времени
+        startNetworkInterceptor();
+        forcePlay();
     }
 
     if (window.appready) startPlugin();
