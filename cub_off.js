@@ -1,21 +1,50 @@
 (function () {
     'use strict';
+    
+    var PLUGIN_VERSION = 'CUB OFF v11.0 (Logic Hack)';
 
-    var PLUGIN_VERSION = 'CUB OFF v10.0 (God Mode)';
+    // 1. ПОДМЕНА ХРАНИЛИЩА (Главная фишка)
+    function hackStorage() {
+        // Перехватываем метод получения данных
+        var originalGet = Lampa.Storage.get;
+        
+        Lampa.Storage.get = function(name, def) {
+            // Если Лампа спрашивает "когда была реклама?" (ad_timer, advertising_last_time)
+            if (name === 'ad_timer' || name === 'advertising_last_time' || name === 'ad_view_time') {
+                // Отвечаем: "Только что!" (Текущее время)
+                return new Date().getTime();
+            }
+            
+            // Если спрашивает "показывать рекламу?"
+            if (name === 'ad_server' || name === 'advertising') {
+                return false;
+            }
 
-    // 1. КОНФИГУРАЦИЯ
+            return originalGet.call(this, name, def);
+        };
+        
+        // На всякий случай пишем в localStorage
+        setInterval(function() {
+            var time = new Date().getTime();
+            localStorage.setItem('ad_timer', time);
+            localStorage.setItem('advertising_last_time', time);
+            // Lampa.Storage.set('ad_timer', time); // Дублируем через API
+        }, 5000);
+    }
+
+    // 2. CONFIG (Стандарт)
     var _cleanSettings = {
-        lang: 'ru', lang_use: true, read_only: false,
+        lang: 'ru', lang_use: true,
         account_use: true, account_sync: true, socket_use: true,
         plugins_use: true, plugins_store: true, torrents_use: true,
         iptv: false, feed: false, push_state: true,
         white_use: false, dcma: false,
         developer: { fps: false, log: false, status: false, active: false },
-        disable_features: { dmca: true, ads: true, trailers: false, reactions: false, discuss: false, ai: true, subscribe: true, blacklist: true, persons: true }
+        disable_features: { dmca: true, ads: true, subscribe: true, blacklist: true }
     };
     window.lampa_settings = _cleanSettings;
 
-    // 2. CSS
+    // 3. CSS (Убираем визуальный мусор)
     function injectCleanerCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
@@ -23,14 +52,8 @@
             .settings--account-premium, .open--notice, .selectbox-item__lock 
             { display: none !important; }
             .button--subscribe { display: none !important; }
-
-            .player-advertising, #oframe_player_advertising, .layer--advertising,
-            .ad-preroll-container, div[class*="advertising"]
-            {
-                opacity: 0 !important; visibility: hidden !important;
-                z-index: -9999 !important; pointer-events: none !important;
-                width: 0 !important; height: 0 !important;
-            }
+            .player-advertising, #oframe_player_advertising { display: none !important; }
+            
             .cub-off-badge {
                 width: 100%; text-align: center; padding: 15px;
                 opacity: 0.5; font-size: 1.1em; color: #fff;
@@ -39,98 +62,16 @@
         `;
         document.body.appendChild(style);
     }
-
-    // 3. GOD MODE TIME KILLER
-    var isGodMode = false;      // Если true - ускоряем ВСЕГДА (игнорируем паузу)
-    var isKillerPaused = false; // Если true - не ускоряем (если не GodMode)
-    var pauseTimer = null;
-    var godTimer = null;
-
-    function activateGodMode() {
-        // console.log('[GodMode] ON (2 sec)');
-        isGodMode = true;
-        
-        if (godTimer) clearTimeout(godTimer);
-        
-        // Через 3 секунды выключаем GodMode
-        // Используем originalSetTimeout из замыкания ниже, но тут нужен трюк
-    }
-
-    function hackTimeouts() {
-        var originalSetTimeout = window.setTimeout;
-
-        // Таймер для выключения GodMode
-        var stopGodMode = function() {
-            if (godTimer) clearTimeout(godTimer);
-            godTimer = originalSetTimeout(function() {
-                // console.log('[GodMode] OFF -> Interactive Mode');
-                isGodMode = false;
-            }, 3000); // 3 секунды жесткого ускорения
-        };
-
-        // Таймер для паузы от кликов
-        var startPauseTimer = function() {
-            if (pauseTimer) clearTimeout(pauseTimer);
-            pauseTimer = originalSetTimeout(function() {
-                isKillerPaused = false;
-            }, 6000);
-        };
-
-        // Перехват кликов
-        var userAction = function() {
-            // Если включен GodMode - игнорируем клики пользователя!
-            if (isGodMode) return;
-            
-            // Иначе - ставим на паузу
-            isKillerPaused = true;
-            startPauseTimer();
-        };
-
-        // Хакнутый таймер
-        window.setTimeout = function(func, delay) {
-            // ЛОГИКА:
-            // 1. Если GodMode -> УСКОРЯЕМ (реклама при старте)
-            // 2. Иначе, если НЕ Пауза И задержка > 2500 -> УСКОРЯЕМ (реклама посреди фильма)
-            
-            if (isGodMode && delay > 1000) {
-                 return originalSetTimeout(func, 1);
-            }
-            
-            if (!isGodMode && !isKillerPaused && delay > 2500 && delay < 9000) {
-                 return originalSetTimeout(func, 1);
-            }
-            
-            return originalSetTimeout(func, delay);
-        };
-
-        // Слушатели
-        window.addEventListener('keydown', userAction, true);
-        window.addEventListener('click', userAction, true);
-        
-        // Слушаем старт плеера -> ВКЛЮЧАЕМ GOD MODE
-        Lampa.Listener.follow('player', function(e) {
-            if(e.type === 'start' || e.type === 'play') {
-                activateGodMode();
-                stopGodMode(); // Запускаем таймер отключения
-            }
-        });
-        
-        // На всякий случай ловим событие рекламы
-        Lampa.Listener.follow('ad', function() {
-            activateGodMode();
-            stopGodMode();
-        });
-    }
-
-    // 4. CLEANER
-    function forcePlay() {
-        setInterval(function() {
-            var adLayer = $('.player-advertising, .layer--advertising');
-            if (adLayer.length) {
-                if (Lampa.Player && Lampa.Player.trigger) Lampa.Player.trigger('ad_end');
-                adLayer.remove();
-            }
-        }, 500);
+    
+    // 4. ПОДМЕНА МОДУЛЯ РЕКЛАМЫ (Если Storage Hack не сработает)
+    function patchAdModule() {
+        if (Lampa.Ad) {
+             // Полностью ломаем логику запуска
+             Lampa.Ad.launch = function(data) {
+                 console.log('Ad blocked by Logic Hack');
+                 if(data.callback) data.callback();
+             }
+        }
     }
 
     // 5. UI
@@ -148,10 +89,9 @@
     }
 
     function startPlugin() {
-        localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        hackTimeouts(); 
-        forcePlay();
+        hackStorage();    // <--- Логический взлом
+        patchAdModule();
         injectInfo();
     }
 
