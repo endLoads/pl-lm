@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'CUB OFF v4.0 (Hybrid)';
+    var PLUGIN_VERSION = 'CUB OFF v4.1 (Event Boost)';
 
     // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
@@ -15,22 +15,19 @@
     };
     window.lampa_settings = _cleanSettings;
 
-    // 2. CSS (Тот самый, который работал)
+    // 2. CSS
     function injectCleanerCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
             .ad-server, [data-component="ad"], .card-promo, .button--subscribe, 
             .settings--account-premium, .open--notice, .selectbox-item__lock 
             { display: none !important; }
-
             .player-advertising, #oframe_player_advertising, .layer--advertising,
             .ad-preroll-container, div[class*="advertising"]
             {
                 opacity: 0 !important; visibility: hidden !important;
                 z-index: -9999 !important; pointer-events: none !important;
             }
-            
-            /* Стиль версии */
             .cub-off-badge {
                 width: 100%; text-align: center; padding: 15px;
                 opacity: 0.5; font-size: 1.1em; color: #fff;
@@ -40,50 +37,57 @@
         document.body.appendChild(style);
     }
 
-    // 3. ЗЛОЙ TimeKiller С ТАЙМЕРОМ (Hybrid Logic)
-    var isBoostActive = false;
+    // 3. УСКОРИТЕЛЬ ПО СОБЫТИЯМ (Event-based Boost)
+    var isBoostActive = false; // По умолчанию ВЫКЛЮЧЕН
     var boostTimer = null;
 
     function activateBoost() {
+        // console.log('[Boost] АКТИВИРОВАН на 15 сек');
         isBoostActive = true;
-        if(boostTimer) clearTimeout(boostTimer); // Сброс таймера
+        
+        if(boostTimer) clearTimeout(boostTimer);
+        
+        // Выключаем через 15 секунд (с запасом)
+        // Используем хакнутый setTimeout, но он сам себя не ускорит, т.к. задержка 15000 (а мы хакаем < 7000)
+        // На всякий случай используем нестандартное число 15500
+        var originalSetTimeout = window.setTimeout; // Берем оригинал, если он еще доступен в замыкании
+        
+        boostTimer = originalSetTimeout(function() { 
+            // console.log('[Boost] ОТКЛЮЧЕН');
+            isBoostActive = false; 
+        }, 15500);
     }
 
     function hackTimeouts() {
         var originalSetTimeout = window.setTimeout;
         
         window.setTimeout = function(func, delay) {
-            // ЛОГИКА ИЗ РАБОЧЕГО СКРИПТА:
-            // Если таймер похож на рекламный (2.5 - 7 сек) -> Ускоряем в 1мс
-            // НО! Только если isBoostActive == true (первые 6 сек)
-            if (isBoostActive && delay > 2500 && delay < 7000) {
-                // console.log('[Hybrid] Skip ' + delay + 'ms');
+            // УСЛОВИЕ:
+            // 1. Ускоритель включен (мы нажали плей недавно)
+            // 2. Задержка похожа на рекламную (от 2 до 8 секунд)
+            if (isBoostActive && delay > 2000 && delay < 8000) {
+                // console.log('[Boost] Skip ' + delay + 'ms');
                 return originalSetTimeout(func, 1); 
             }
             return originalSetTimeout(func, delay);
         };
 
-        // Логика таймера отключения (через 6 секунд вырубаем "злость")
-        activateBoost();
-        boostTimer = originalSetTimeout(function() { 
-            console.log('[Hybrid] Boost OFF');
-            isBoostActive = false; 
-        }, 6000);
-        
-        // Перезапуск таймера при каждом открытии плеера
+        // Слушаем старт плеера, чтобы включить буст
         Lampa.Listener.follow('player', function(e) {
-            if(e.type === 'start') {
+            if(e.type === 'start' || e.type === 'play') {
                 activateBoost();
-                boostTimer = originalSetTimeout(function() { isBoostActive = false; }, 6000);
             }
+        });
+        
+        // Также слушаем событие "реклама", если оно проскочит
+        Lampa.Listener.follow('ad', function(e) {
+             activateBoost();
         });
     }
 
-    // 4. СЕТЕВОЙ ПЕРЕХВАТЧИК (Из той же рабочей версии)
-    // Но аккуратный, чтобы не ломать плагины (только для рекламы)
+    // 4. СЕТЕВОЙ ПЕРЕХВАТЧИК
     function startNetworkInterceptor() {
         var blockList = ['vast', 'preroll', 'advertising', 'yandex.ru/ads', 'googleads'];
-        
         var originalFetch = window.fetch;
         window.fetch = function(input, init) {
             var url = (typeof input === 'string') ? input : (input.url || '');
@@ -92,7 +96,6 @@
             }
             return originalFetch.apply(this, arguments);
         };
-        
         var originalOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function (method, url) {
             if (typeof url === 'string') {
@@ -107,7 +110,7 @@
         };
     }
 
-    // 5. ПРИНУДИТЕЛЬНАЯ ЧИСТКА (Тоже из рабочей версии)
+    // 5. DOM CLEANER
     function forcePlay() {
         setInterval(function() {
             var adLayer = $('.player-advertising, .layer--advertising');
@@ -118,7 +121,7 @@
         }, 500);
     }
 
-    // 6. ВСТАВКА ВЕРСИИ (Рабочий метод)
+    // 6. VERSION UI
     function injectInfo() {
         var observer = new MutationObserver(function(mutations) {
             var settingsBox = document.querySelector('.settings__content');
@@ -135,7 +138,7 @@
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        hackTimeouts();          // <--- Злой хак + Таймер
+        hackTimeouts();          
         startNetworkInterceptor();
         forcePlay();
         injectInfo();
