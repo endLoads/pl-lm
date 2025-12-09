@@ -57,8 +57,9 @@
         });
     }
 
-    // Меню
+        // Меню настроек (V3 - Исправленный скролл)
     function addMenu() {
+        // Создаем элемент, используя стандартные классы Лампы
         var field = $(`
             <div class="settings-folder selector" data-component="cubox_core">
                 <div class="settings-folder__icon">
@@ -75,17 +76,39 @@
         
         Lampa.Settings.listener.follow('open', function (e) {
             if (e.name == 'main') {
-                var container = $('.settings__content');
-                var pluginsItem = container.find('[data-component="plugins"]');
-                if (pluginsItem.length) pluginsItem.after(field);
-                else container.append(field);
-                
-                field.on('hover:enter', function () {
-                    openStore();
-                });
+                // Ждем рендера
+                setTimeout(function() {
+                    // 1. Ищем правильный скролл-контейнер
+                    var container = $('.settings__content .settings__layer'); 
+                    
+                    // Если слоя нет (старая Лампа), берем контент, но проверяем скролл
+                    if (!container.length) container = $('.settings__content');
+                    
+                    // 2. Вставляем Cubox ПЕРЕД первым элементом (обычно это "Аккаунт" или "Интерфейс")
+                    // Это гарантирует, что он попадет в поток
+                    var firstItem = container.find('.settings-folder').first();
+                    
+                    if (firstItem.length) {
+                        firstItem.before(field);
+                    } else {
+                        container.append(field);
+                    }
+                    
+                    // 3. Важно: Удаляем возможные конфликты позиционирования
+                    field.css({
+                        'position': 'relative',
+                        'z-index': '1'
+                    });
+
+                    // 4. Навешиваем обработчик
+                    field.unbind('hover:enter').on('hover:enter', function () {
+                        openStore();
+                    });
+                }, 50); // Чуть увеличил задержку для надежности
             }
         });
     }
+
 
     // Магазин
     function openStore() {
