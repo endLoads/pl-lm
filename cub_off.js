@@ -1,103 +1,107 @@
 (function () {
   'use strict';
 
-  // 1. Ждем загрузки платформы, если нужно
-  if(Lampa.Platform) Lampa.Platform.tv();
-
-  // 2. Полная перезапись настроек (АКТУАЛЬНАЯ СТРУКТУРА 2025)
-  // Мы добавляем недостающие поля, чтобы Lampa не падала
+  // --- НАСТРОЙКИ ---
   var _cleanSettings = {
-    // --- Основные ---
-    lang: 'ru', // Язык (по умолчанию русский)
+    lang: 'ru',
     lang_use: true,
-    read_only: false, // Разрешаем сохранять изменения
-    
-    // --- Аккаунт и Синхронизация ---
+    read_only: false,
     account_use: true,
     account_sync: true,
-    socket_use: true, // ВАЖНО: true, иначе не работает пульт и CUB
-    socket_url: 'wss://cub.red/socket', // Стандартный сокет
-    
-    // --- Контент и Плагины ---
+    socket_use: true,
     plugins_use: true,
     plugins_store: true,
-    torrents_use: true, // Торренты включены
+    torrents_use: true,
     iptv: false,
-    feed: false,      // Лента рекомендаций (обычно false в модах)
-    push_state: true, // Сохранение истории в браузере
-
-    // --- Безопасность и Анти-блок ---
-    white_use: false, // Белые списки выкл
-    dcma: false,      // Антипиратская заглушка выкл (важно!)
-    
-    // --- То, из-за чего была ошибка (Developer Mode) ---
-    developer: {
-      fps: false,
-      log: false,
-      status: false,
-      active: false
-    },
-
-    // --- Скрытые функции (Disable Features) ---
-    // Это то, что реально выключает рекламу и кнопки
+    feed: false,
+    push_state: true,
+    white_use: false,
+    dcma: false, 
+    developer: { fps: false, log: false, status: false, active: false },
     disable_features: {
-      dmca: true,        // Скрывать заглушки "удалено правообладателем"
-      ads: true,         // Блокировать рекламу
-      trailers: false,   // Трейлеры оставить
-      reactions: false,  // Реакции (лайки/дизлайки) - по желанию
-      discuss: false,    // Обсуждения/комменты
-      ai: true,          // AI рекомендации (иногда глючат)
-      subscribe: true,   // Скрыть меню "Подписка"
-      blacklist: true,   // Скрыть черный список
-      persons: true      // Персоны (актеры) - можно true или false
+      dmca: true,
+      ads: true,
+      subscribe: true,
+      blacklist: true
     }
   };
 
-  // ПРИМЕНЯЕМ НАСТРОЙКИ (Перезапись)
   window.lampa_settings = _cleanSettings;
 
-  // 3. CSS-патч (Лучший способ скрыть мусор)
-  // Это работает быстрее и надежнее, чем скрипт удаления
-  function injectCSS() {
+  // --- CSS ПАТЧ (Убираем рекламу и серые экраны) ---
+  function injectCleanerCSS() {
     var style = document.createElement("style");
     style.innerHTML = `
+      /* 1. Убираем интерфейсный мусор Лампы */
       .button--subscribe, 
       .settings--account-premium,
       .ad-server,
+      .ad-server-resize,
+      div[class*="ad-server"],
       .selectbox-item__lock,
       .black-friday__button,
       .christmas__button,
-      .open--notice { display: none !important; }
+      .open--notice,
+      .card-promo, 
+      .promo-block 
+      { 
+          display: none !important; 
+      }
+
+      /* 2. БОРЬБА С СЕРЫМ ЭКРАНОМ "РЕКЛАМА" */
+      /* Скрываем слои, которые перекрывают плеер */
+      #oframe_player_advertising,
+      .player-advertising,
+      .ad-preroll-container,
+      div[id^="ad_"],
+      div[class*="advertising"],
+      div:contains("Реклама") 
+      {
+          display: none !important;
+          opacity: 0 !important;
+          z-index: -9999 !important;
+          pointer-events: none !important;
+          width: 0 !important;
+          height: 0 !important;
+      }
+      
+      /* Если реклама сделана через iframe поверх видео */
+      iframe[src*="ad"], iframe[src*="promo"] {
+          display: none !important;
+      }
     `;
     document.body.appendChild(style);
   }
+  
+  // --- JS Очистка (на всякий случай) ---
+  function removeJunk() {
+      // Ищем элементы по тексту "Реклама" и удаляем
+      $('div').filter(function() {
+          return $(this).text().trim() === 'Реклама';
+      }).remove();
+  }
 
-  // 4. Хак региона (Для постеров)
-  function applyRegionHack() {
-    // Ставим UK (Великобритания) или UA для обхода блоков
+  function startPlugin() {
     var time = new Date().getTime();
     localStorage.setItem("region", JSON.stringify({code: "uk", time: time}));
-  }
 
-  // 5. Инициализация
-  function startPlugin() {
-    injectCSS();
-    applyRegionHack();
+    injectCleanerCSS();
+
+    Lampa.Listener.follow('activity', function (e) {
+        if (e.type === 'start') {
+           setTimeout(removeJunk, 500);
+        }
+    });
     
-    // Очистка интерфейса при старте (если что-то успело проскочить)
-    if (window.$) {
-        $(document).ready(function() {
-            $(".ad-server").remove();
-        });
-    }
-  }
-
-  if (window.appready) {
-    startPlugin();
-  } else {
-    Lampa.Listener.follow("app", function (e) {
-      if (e.type == "ready") startPlugin();
+    // Специальный слушатель для плеера (когда открывается видео)
+    Lampa.Listener.follow('player', function(e) {
+        if(e.type == 'ready' || e.type == 'start') {
+            setTimeout(removeJunk, 1000); // Пробуем удалить надпись через секунду после старта
+        }
     });
   }
+
+  if (window.appready) startPlugin();
+  else Lampa.Listener.follow("app", function (e) { if (e.type == "ready") startPlugin(); });
 
 })();
