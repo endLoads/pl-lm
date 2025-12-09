@@ -1,3 +1,7 @@
+// @name: Cub_off
+// @version: v1
+// @description: Отключение рекламы CUB
+
 (function () {
     'use strict';
 
