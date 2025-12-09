@@ -1,51 +1,49 @@
 (function () {
     'use strict';
 
-    console.log('[Cubox] Core v1.0 started');
+    console.log('[Cubox] Core v3.0 (endLoads) started');
 
     // ==========================================
     // НАСТРОЙКИ РЕПОЗИТОРИЯ
     // ==========================================
     var GITHUB_USER = 'endLoads'; 
     var GITHUB_REPO = 'pl-lm'; 
-    var FOLDER_PATH = 'Cubox'; 
+    var BRANCH = 'main';
+    var FOLDER_PATH = 'Cubox'; // Ищет плагины здесь
     // ==========================================
 
     var STORAGE_KEY = 'cubox_plugins_state';
     var API_URL = 'https://api.github.com/repos/' + GITHUB_USER + '/' + GITHUB_REPO + '/contents/' + FOLDER_PATH;
-    var RAW_URL = 'https://raw.githubusercontent.com/' + GITHUB_USER + '/' + GITHUB_REPO + '/main/' + FOLDER_PATH + '/';
+    var CDN_BASE = 'https://cdn.jsdelivr.net/gh/' + GITHUB_USER + '/' + GITHUB_REPO + '@' + BRANCH + '/' + FOLDER_PATH + '/';
 
     var enabledPlugins = Lampa.Storage.get(STORAGE_KEY, '{}');
-    
-    // Функция загрузки плагина (через network silent для скорости)
+    var needReload = false; 
+
+    // Функция загрузки через CDN
     function loadPlugin(filename) {
         var timestamp = new Date().getTime();
-        var url = RAW_URL + filename + '?t=' + timestamp;
+        var url = CDN_BASE + filename + '?t=' + timestamp;
         
-        Lampa.Network.silent(url, function(code) {
-            try {
-                var script = document.createElement('script');
-                script.type = 'text/javascript';
-                script.innerHTML = code;
-                document.body.appendChild(script);
-                console.log('[Cubox] Plugin loaded:', filename);
-            } catch(e) {
-                console.error('[Cubox] Plugin error:', filename, e);
-            }
-        });
+        var script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = url;
+        script.async = true;
+        
+        script.onload = function() { console.log('[Cubox] OK:', filename); };
+        script.onerror = function() { console.error('[Cubox] FAIL:', filename, url); };
+        
+        document.body.appendChild(script);
     }
 
-    // Запуск включенных плагинов
+    // Старт
     function startPlugins() {
         var list = Object.keys(enabledPlugins);
         list.forEach(function(file) {
-            if (enabledPlugins[file]) {
-                loadPlugin(file);
-            }
+            if (enabledPlugins[file]) loadPlugin(file);
         });
     }
 
-    // Получение списка файлов
+    // Список файлов
     function fetchFileList(callback) {
         Lampa.Network.silent(API_URL, function(data) {
             if (Array.isArray(data)) {
@@ -59,7 +57,7 @@
         });
     }
 
-    // Меню настроек
+    // Меню
     function addMenu() {
         var field = $(`
             <div class="settings-folder selector" data-component="cubox_core">
@@ -89,16 +87,19 @@
         });
     }
 
-    // Отрисовка магазина
+    // Магазин
     function openStore() {
+        Lampa.Loading.start(function(){ Lampa.Loading.stop(); });
+
         fetchFileList(function(files) {
+            Lampa.Loading.stop();
             var items = [];
             files.forEach(function(filename) {
                 var isEnabled = enabledPlugins[filename] === true;
                 items.push({
                     title: filename,
                     subtitle: isEnabled ? 'Включен' : 'Выключен',
-                    icon: isEnabled ? '<div style="color:#4bbc16">●</div>' : '<div>○</div>',
+                    icon: isEnabled ? '<div style="width:20px;height:20px;background:#4bbc16;border-radius:50%"></div>' : '<div style="width:20px;height:20px;border:2px solid #fff;border-radius:50%"></div>',
                     file: filename,
                     enabled: isEnabled
                 });
@@ -110,25 +111,21 @@
                 onSelect: function(item) {
                     enabledPlugins[item.file] = !item.enabled;
                     Lampa.Storage.set(STORAGE_KEY, enabledPlugins);
-                    setTimeout(openStore, 50); // Обновляем UI
+                    needReload = true; // Запоминаем, что нужно перезагрузиться
+                    setTimeout(openStore, 50);
                 },
                 onBack: function() {
-                    window.location.reload(); // Перезагрузка для применения изменений
+                    if (needReload) {
+                        Lampa.Noty.show('Перезагрузка...');
+                        setTimeout(function(){ window.location.reload(); }, 1000);
+                    } else {
+                        Lampa.Controller.toggle('settings_component');
+                    }
                 }
             });
         });
     }
 
-    // Инициализация
-    if (window.appready) {
-        addMenu();
-        startPlugins();
-    } else {
-        Lampa.Listener.follow('app', function (e) {
-            if (e.type == 'ready') {
-                addMenu();
-                startPlugins();
-            }
-        });
-    }
+    if (window.appready) { addMenu(); startPlugins(); }
+    else { Lampa.Listener.follow('app', function (e) { if (e.type == 'ready') { addMenu(); startPlugins(); } }); }
 })();
