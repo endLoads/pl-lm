@@ -1,45 +1,64 @@
 (function () {
     'use strict';
-    // Настройки
+
+    console.log('[Cubox] Store v2.0 (JSON based) started');
+
+    // ==========================================
+    // НАСТРОЙКИ
+    // ==========================================
     var GITHUB_USER = 'endLoads'; 
     var GITHUB_REPO = 'pl-lm'; 
     var BRANCH = 'main';
     var FOLDER_PATH = 'Cubox'; 
-    
+    // ==========================================
+
     var STORAGE_KEY = 'cubox_plugins_state';
+    // Ссылка на JSON манифест
     var MANIFEST_URL = 'https://raw.githubusercontent.com/' + GITHUB_USER + '/' + GITHUB_REPO + '/' + BRANCH + '/' + FOLDER_PATH + '/plugins.json';
+    // База для загрузки самих скриптов
     var CDN_BASE = 'https://cdn.jsdelivr.net/gh/' + GITHUB_USER + '/' + GITHUB_REPO + '@' + BRANCH + '/' + FOLDER_PATH + '/';
+
     var enabledPlugins = Lampa.Storage.get(STORAGE_KEY, '{}');
     var needReload = false; 
 
-    // Загрузка плагина
+    // --- Загрузка плагина ---
     function loadPlugin(filename) {
         var url = CDN_BASE + filename + '?t=' + Date.now();
         var script = document.createElement('script');
+        script.type = 'text/javascript';
         script.src = url;
         script.async = true;
         document.body.appendChild(script);
     }
-    
-    // Старт
+
+    // --- Старт при запуске ---
     function startPlugins() {
-        Object.keys(enabledPlugins).forEach(function(file) {
+        var list = Object.keys(enabledPlugins);
+        list.forEach(function(file) {
             if (enabledPlugins[file]) loadPlugin(file);
         });
     }
 
-    // Чтение JSON
+    // --- Получение списка (теперь читаем JSON) ---
     function fetchManifest(callback) {
-        // Timestamp чтобы не кэшировался JSON
-        Lampa.Network.silent(MANIFEST_URL + '?t=' + Date.now(), function(data) {
+        // Добавляем timestamp, чтобы не кэшировался JSON
+        var url = MANIFEST_URL + '?t=' + Date.now();
+        
+        Lampa.Network.silent(url, function(data) {
             try {
+                // Если пришел строкой - парсим, если объектом - оставляем
                 var json = (typeof data === 'string') ? JSON.parse(data) : data;
                 callback(json);
-            } catch (e) { Lampa.Noty.show('Ошибка JSON Store'); }
+            } catch (e) {
+                Lampa.Noty.show('Cubox: Ошибка JSON манифеста');
+                console.error(e);
+            }
+        }, function(a, c) {
+            Lampa.Noty.show('Ошибка загрузки каталога');
         });
     }
 
-    // Меню
+    // --- Меню в настройках (Твоя рабочая версия 3) ---
     function addMenu() {
         var field = $(`
             <div class="settings-folder selector" data-component="cubox_core">
@@ -57,35 +76,46 @@
         
         Lampa.Settings.listener.follow('open', function (e) {
             if (e.name == 'main') {
-                var timer = setInterval(function() {
-                    var scrollLayer = $('.settings__content .scroll__content');
-                    if (scrollLayer.length) {
-                        clearInterval(timer);
-                        var first = scrollLayer.find('.settings-folder').first();
-                        if (first.length) first.before(field);
-                        else scrollLayer.append(field);
-                        field.on('hover:enter', openStore);
-                    }
-                }, 50);
+                setTimeout(function() {
+                    var container = $('.settings__content .settings__layer');
+                    if (!container.length) container = $('.settings__content');
+                    var firstItem = container.find('.settings-folder').first();
+                    
+                    if (firstItem.length) firstItem.before(field);
+                    else container.prepend(field);
+                    
+                    field.on('hover:enter', function () {
+                        openStore();
+                    });
+                }, 10);
             }
         });
     }
 
+    // --- Отрисовка Магазина ---
     function openStore() {
         Lampa.Loading.start(function(){ Lampa.Loading.stop(); });
+
         fetchManifest(function(plugins) {
             Lampa.Loading.stop();
             var items = [];
+            
+            // Проходим по JSON
             plugins.forEach(function(p) {
                 var isEnabled = enabledPlugins[p.file] === true;
+                
+                // Формируем красивое описание: "v1.0 - Описание..."
+                var desc = '<span style="color: #aaa; font-size: 0.9em;">v' + p.version + '</span> — ' + p.description;
+
                 items.push({
-                    title: p.name,
-                    subtitle: '<span style="opacity:0.7;font-size:0.9em">v' + p.version + '</span> — ' + p.description,
+                    title: p.name,       // Красивое имя из JSON
+                    subtitle: desc,      // Описание с версией
                     icon: isEnabled ? '<div style="width:20px;height:20px;background:#4bbc16;border-radius:50%"></div>' : '<div style="width:20px;height:20px;border:2px solid #fff;border-radius:50%"></div>',
-                    file: p.file,
+                    file: p.file,        // Реальное имя файла (скрыто в коде)
                     enabled: isEnabled
                 });
             });
+
             Lampa.Select.show({
                 title: 'Cubox Store',
                 items: items,
@@ -97,9 +127,11 @@
                 },
                 onBack: function() {
                     if (needReload) {
-                        Lampa.Noty.show('Перезагрузка...');
+                        Lampa.Noty.show('Перезагрузка для применения...');
                         setTimeout(function(){ window.location.reload(); }, 1000);
-                    } else Lampa.Controller.toggle('settings_component');
+                    } else {
+                        Lampa.Controller.toggle('settings_component');
+                    }
                 }
             });
         });
