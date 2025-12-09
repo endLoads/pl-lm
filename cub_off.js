@@ -1,9 +1,27 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'CUB OFF v18.0 (Ghost Mode)';
+    var PLUGIN_VERSION = 'CUB OFF v19.0 (Ghost + Fix)';
 
-    // 1. ПЕРЕХВАТЧИК Object.defineProperty (Fake Premium)
+    // 1. ГЛУШИТЕЛЬ ОШИБОК CANVAS (FIX для broken state)
+    // Перехватываем попытку нарисовать битую картинку и молча игнорируем её
+    try {
+        var originalDrawImage = CanvasRenderingContext2D.prototype.drawImage;
+        CanvasRenderingContext2D.prototype.drawImage = function() {
+            try {
+                return originalDrawImage.apply(this, arguments);
+            } catch (e) {
+                // Если ошибка связана с битой картинкой — молчим
+                if (e.name === 'InvalidStateError' || e.message.indexOf('broken') !== -1) {
+                    return;
+                }
+                // Остальные ошибки (редкие) можно тоже проигнорировать или пробросить
+                // throw e; 
+            }
+        };
+    } catch(e) {}
+
+    // 2. ПЕРЕХВАТЧИК Object.defineProperty (Fake Premium)
     try {
         var originalDefineProperty = Object.defineProperty;
         Object.defineProperty = function(obj, prop, descriptor) {
@@ -16,7 +34,7 @@
         };
     } catch(e) {}
 
-    // 2. БЕЗОПАСНЫЙ CSS
+    // 3. БЕЗОПАСНЫЙ CSS
     function injectSafeCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
@@ -34,12 +52,12 @@
                 margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);
                 pointer-events: none;
             }
-            .cub-off-badge span { color: #b66ee8; font-weight: bold; } /* Фиолетовый Ghost */
+            .cub-off-badge span { color: #b66ee8; font-weight: bold; }
         `;
         document.body.appendChild(style);
     }
 
-    // 3. УМНЫЙ ПЕРЕХВАТ ТАЙМЕРОВ
+    // 4. УМНЫЙ ПЕРЕХВАТ ТАЙМЕРОВ
     function patchTimers() {
         var originalSetTimeout = window.setTimeout;
         window.setTimeout = function(func, delay) {
@@ -50,49 +68,42 @@
         };
     }
 
-    // 4. БЛОКИРОВЩИК ШПИОНОВ (НОВОЕ!)
+    // 5. БЛОКИРОВЩИК ШПИОНОВ (Ghost Mode)
     function killSpyware() {
-        // Очищаем локальные метки рекламы
         try {
             localStorage.removeItem('metric_ad_view');
             localStorage.removeItem('vast_device_uid');
-            localStorage.removeItem('vast_device_guid');
         } catch(e) {}
 
-        // Перехватываем запросы, если Lampa уже загружена
         var interval = setInterval(function() {
             if (typeof Lampa !== 'undefined') {
-                // Глушим метрику CUB
                 if (Lampa.ServiceMetric) {
-                    Lampa.ServiceMetric.counter = function() { /* shhh... */ };
-                    Lampa.ServiceMetric.histogram = function() { /* silence */ };
+                    Lampa.ServiceMetric.counter = function() { };
+                    Lampa.ServiceMetric.histogram = function() { };
                 }
-                // Глушим статистику рекламы (если модуль доступен глобально)
                 if (window.stat1launch) window.stat1launch = function() {};
                 if (window.stat1error) window.stat1error = function() {};
                 
-                // Чистим настройки разработчика, чтобы не спамил в консоль
+                // Принудительно отключаем вывод ошибок на экран
                 if (Lampa.Settings && Lampa.Settings.developer) {
                     Lampa.Settings.developer.log = false;
                     Lampa.Settings.developer.active = false;
+                    Lampa.Settings.developer.status = false; // <-- Добавил это, чтобы убрать зеленую плашку
                 }
                 
                 clearInterval(interval);
             }
         }, 1000);
-        
-        // Останавливаем через 30 секунд, чтобы не висел вечно
         setTimeout(function() { clearInterval(interval); }, 30000);
     }
 
-    // 5. UI
+    // 6. UI
     function injectInfo() {
         var observer = new MutationObserver(function(mutations) {
             var settingsBox = document.querySelector('.settings__content');
             if (settingsBox && !settingsBox.querySelector('.cub-off-badge')) {
                 var badge = document.createElement('div');
                 badge.className = 'cub-off-badge';
-                // Меняем надпись на Ghost Mode
                 badge.innerHTML = PLUGIN_VERSION + '<br>Status: <span>Ghost Mode</span>';
                 settingsBox.appendChild(badge);
             }
@@ -100,20 +111,19 @@
         observer.observe(document.body, { childList: true, subtree: true });
     }
     
-    // 6. НАСТРОЙКИ ЛАМПЫ
+    // 7. ЗАПУСК
     window.lampa_settings = window.lampa_settings || {};
     window.lampa_settings.account_use = true;
     window.lampa_settings.disable_features = { 
         dmca: true, ads: true, trailers: false, 
         reactions: false, discuss: false, ai: true,
-        blacklist: true // Отключаем черный список (еще больше контента)
+        blacklist: true 
     };
 
-    // 7. ЗАПУСК
     function init() {
         injectSafeCSS();
         patchTimers();
-        killSpyware(); // <-- Запуск анти-шпиона
+        killSpyware();
         injectInfo();
         
         if (typeof Lampa !== 'undefined' && Lampa.Account) {
