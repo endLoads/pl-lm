@@ -15,17 +15,13 @@
       torrents_use: true,
       white_use: false,
       lang_use: true
-      developer: {
-          fps: false,
-          log: false,
-          status: false
     };
     _0x4e7f98.read_only = false;
     _0x4e7f98.dcma = false;
     _0x4e7f98.push_state = true;
     _0x4e7f98.iptv = false;
     _0x4e7f98.feed = false;
-    window.lampa_settings = _0x4e7f98;
+    window.lampa_settings = Object.assign({}, window.lampa_settings || {}, _0x4e7f98);;
     var _0x4d7d0d = {
       dmca: true,
       reactions: false,
