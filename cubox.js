@@ -57,7 +57,7 @@
         });
     }
 
-    // Меню
+        // Меню настроек (ИСПРАВЛЕННОЕ)
     function addMenu() {
         var field = $(`
             <div class="settings-folder selector" data-component="cubox_core">
@@ -75,17 +75,24 @@
         
         Lampa.Settings.listener.follow('open', function (e) {
             if (e.name == 'main') {
-                var container = $('.settings__content');
-                var pluginsItem = container.find('[data-component="plugins"]');
-                if (pluginsItem.length) pluginsItem.after(field);
-                else container.append(field);
-                
-                field.on('hover:enter', function () {
-                    openStore();
-                });
+                // Ждем, пока отрендерится список
+                setTimeout(function() {
+                    var container = $('.settings__content .settings__layer');
+                    
+                    // Если слой не найден (старые версии), ищем просто контент
+                    if (!container.length) container = $('.settings__content');
+
+                    // Вставляем САМЫМ ПЕРВЫМ элементом
+                    container.prepend(field);
+                    
+                    field.on('hover:enter', function () {
+                        openStore();
+                    });
+                }, 10);
             }
         });
     }
+
 
     // Магазин
     function openStore() {
