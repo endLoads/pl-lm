@@ -92,26 +92,31 @@
         });
     }
 
-    // --- Отрисовка Магазина ---
-    function openStore() {
+        function openStore() {
         Lampa.Loading.start(function(){ Lampa.Loading.stop(); });
-
         fetchManifest(function(plugins) {
             Lampa.Loading.stop();
             var items = [];
             
-            // Проходим по JSON
             plugins.forEach(function(p) {
                 var isEnabled = enabledPlugins[p.file] === true;
                 
-                // Формируем красивое описание: "v1.0 - Описание..."
-                var desc = '<span style="color: #aaa; font-size: 0.9em;">v' + p.version + '</span> — ' + p.description;
+                // Формируем подзаголовок с явным статусом
+                var statusText = isEnabled ? '<span style="color:#4bbc16;font-weight:bold">ВКЛЮЧЕНО</span>' : '<span style="color:#aaa">Выключено</span>';
+                var versionInfo = '<span style="opacity:0.7"> • v' + p.version + '</span>';
+                var descInfo = '<div style="opacity:0.6;font-size:0.9em;margin-top:2px">' + p.description + '</div>';
+
+                // Иконка: Зеленый шар или Пустое кольцо
+                var iconHtml = isEnabled ? 
+                    '<div style="width:16px;height:16px;background:#4bbc16;border-radius:50%;box-shadow:0 0 10px #4bbc16"></div>' : 
+                    '<div style="width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-radius:50%"></div>';
 
                 items.push({
-                    title: p.name,       // Красивое имя из JSON
-                    subtitle: desc,      // Описание с версией
-                    icon: isEnabled ? '<div style="width:20px;height:20px;background:#4bbc16;border-radius:50%"></div>' : '<div style="width:20px;height:20px;border:2px solid #fff;border-radius:50%"></div>',
-                    file: p.file,        // Реальное имя файла (скрыто в коде)
+                    title: p.name,
+                    // Subtitle теперь содержит статус, версию и описание
+                    subtitle: statusText + versionInfo + descInfo,
+                    icon: iconHtml,
+                    file: p.file,
                     enabled: isEnabled
                 });
             });
@@ -123,11 +128,11 @@
                     enabledPlugins[item.file] = !item.enabled;
                     Lampa.Storage.set(STORAGE_KEY, enabledPlugins);
                     needReload = true;
-                    setTimeout(openStore, 50);
+                    setTimeout(openStore, 50); // Мгновенное обновление UI
                 },
                 onBack: function() {
                     if (needReload) {
-                        Lampa.Noty.show('Перезагрузка для применения...');
+                        Lampa.Noty.show('Перезагрузка...');
                         setTimeout(function(){ window.location.reload(); }, 1000);
                     } else {
                         Lampa.Controller.toggle('settings_component');
