@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var PLUGIN_VERSION = 'CUB OFF v7.0 (Total Killer)';
+    var PLUGIN_VERSION = 'CUB OFF v8.0 (Smart Filter)';
 
     // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
@@ -40,21 +40,37 @@
         document.body.appendChild(style);
     }
 
-    // 3. БЕЗУСЛОВНЫЙ TIME KILLER (Работает всегда)
+    // 3. УМНЫЙ TIME KILLER
     function hackTimeouts() {
         var originalSetTimeout = window.setTimeout;
         
         window.setTimeout = function(func, delay) {
-            // Если таймер похож на рекламный (2.5 - 9 сек)
-            // Мы просто ускоряем его ВСЕГДА. Без условий. Без таймеров отключения.
-            if (delay > 2500 && delay < 9000) {
-                return originalSetTimeout(func, 1); 
+            
+            // ЛОГИКА ФИЛЬТРАЦИИ:
+            
+            // 1. Если это точное рекламное время (5, 10, 15, 30 сек) -> УБИВАЕМ
+            if (delay === 5000 || delay === 10000 || delay === 15000 || delay === 30000) {
+                // console.log('[SmartFilter] Killed Ad Timer: ' + delay);
+                return originalSetTimeout(func, 1);
             }
+            
+            // 2. Если это диапазон интерфейса (3-4 сек) -> НЕ ТРОГАЕМ
+            if (delay >= 3000 && delay <= 4000) {
+                // console.log('[SmartFilter] Saved UI Timer: ' + delay);
+                return originalSetTimeout(func, delay);
+            }
+
+            // 3. Остальные подозрительные (от 6 до 9 сек) -> УБИВАЕМ (на всякий случай)
+            if (delay > 6000 && delay < 9000) {
+                 return originalSetTimeout(func, 1);
+            }
+
+            // Все остальное - пропускаем
             return originalSetTimeout(func, delay);
         };
     }
 
-    // 4. ДОПОЛНИТЕЛЬНАЯ ЗАЧИСТКА
+    // 4. CLEANER
     function forcePlay() {
         setInterval(function() {
             var adLayer = $('.player-advertising, .layer--advertising');
@@ -82,7 +98,7 @@
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        hackTimeouts(); // <--- Убийца времени (постоянный)
+        hackTimeouts(); // <--- Умный фильтр
         forcePlay();
         injectInfo();
     }
