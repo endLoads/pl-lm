@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    var PLUGIN_VERSION = 'CUB OFF v4.0 (Hybrid)';
+
     // 1. КОНФИГУРАЦИЯ
     var _cleanSettings = {
         lang: 'ru', lang_use: true, read_only: false,
@@ -13,7 +15,7 @@
     };
     window.lampa_settings = _cleanSettings;
 
-    // 2. CSS (Скрываем визуально)
+    // 2. CSS (Тот самый, который работал)
     function injectCleanerCSS() {
         var style = document.createElement("style");
         style.innerHTML = `
@@ -27,29 +29,58 @@
                 opacity: 0 !important; visibility: hidden !important;
                 z-index: -9999 !important; pointer-events: none !important;
             }
+            
+            /* Стиль версии */
+            .cub-off-badge {
+                width: 100%; text-align: center; padding: 15px;
+                opacity: 0.5; font-size: 1.1em; color: #fff;
+                margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);
+            }
         `;
         document.body.appendChild(style);
     }
 
-    // 3. ВЗЛОМ ТАЙМЕРОВ (TIME KILLER) - ГЛАВНОЕ ИСПРАВЛЕНИЕ
+    // 3. ЗЛОЙ TimeKiller С ТАЙМЕРОМ (Hybrid Logic)
+    var isBoostActive = false;
+    var boostTimer = null;
+
+    function activateBoost() {
+        isBoostActive = true;
+        if(boostTimer) clearTimeout(boostTimer); // Сброс таймера
+    }
+
     function hackTimeouts() {
-        console.log('[TimeKiller] Перехват таймеров запущен');
-        
         var originalSetTimeout = window.setTimeout;
         
         window.setTimeout = function(func, delay) {
-            // Если таймер ставится на 3-7 секунд (типичное ожидание рекламы)
-            if (delay > 2500 && delay < 7000) {
-                console.log('[TimeKiller] Найден подозрительный таймер (' + delay + 'ms) -> Ускоряем до 1ms');
-                // Заменяем задержку на 1 миллисекунду (мгновенно)
+            // ЛОГИКА ИЗ РАБОЧЕГО СКРИПТА:
+            // Если таймер похож на рекламный (2.5 - 7 сек) -> Ускоряем в 1мс
+            // НО! Только если isBoostActive == true (первые 6 сек)
+            if (isBoostActive && delay > 2500 && delay < 7000) {
+                // console.log('[Hybrid] Skip ' + delay + 'ms');
                 return originalSetTimeout(func, 1); 
             }
-            // Все остальные таймеры работают как обычно
             return originalSetTimeout(func, delay);
         };
+
+        // Логика таймера отключения (через 6 секунд вырубаем "злость")
+        activateBoost();
+        boostTimer = originalSetTimeout(function() { 
+            console.log('[Hybrid] Boost OFF');
+            isBoostActive = false; 
+        }, 6000);
+        
+        // Перезапуск таймера при каждом открытии плеера
+        Lampa.Listener.follow('player', function(e) {
+            if(e.type === 'start') {
+                activateBoost();
+                boostTimer = originalSetTimeout(function() { isBoostActive = false; }, 6000);
+            }
+        });
     }
 
-    // 4. СЕТЕВОЙ БЛОК (Чтобы реклама падала в ошибку сразу)
+    // 4. СЕТЕВОЙ ПЕРЕХВАТЧИК (Из той же рабочей версии)
+    // Но аккуратный, чтобы не ломать плагины (только для рекламы)
     function startNetworkInterceptor() {
         var blockList = ['vast', 'preroll', 'advertising', 'yandex.ru/ads', 'googleads'];
         
@@ -67,7 +98,6 @@
             if (typeof url === 'string') {
                 for (var i = 0; i < blockList.length; i++) {
                     if (url.indexOf(blockList[i]) !== -1) {
-                        // Важно: не просто блокируем, а вызываем ошибку, чтобы сработал таймер восстановления
                         this.onerror = function() {}; 
                         return originalOpen.call(this, method, 'http://0.0.0.0'); 
                     }
@@ -77,34 +107,38 @@
         };
     }
 
-    // 5. ПРИНУДИТЕЛЬНЫЙ СТАРТ ПЛЕЕРА
+    // 5. ПРИНУДИТЕЛЬНАЯ ЧИСТКА (Тоже из рабочей версии)
     function forcePlay() {
         setInterval(function() {
-            // Если видим слой рекламы
-            if ($('.player-advertising, .layer--advertising').length) {
-                // Пытаемся сообщить Лампе, что реклама кончилась
+            var adLayer = $('.player-advertising, .layer--advertising');
+            if (adLayer.length) {
                 if (Lampa.Player && Lampa.Player.trigger) Lampa.Player.trigger('ad_end');
-                
-                // Удаляем слой
-                $('.player-advertising, .layer--advertising').remove();
-            }
-            
-            // Если видео есть, но стоит на паузе в начале (0 сек)
-            var video = $('video')[0];
-            if (video && video.paused && video.currentTime < 1) {
-                // Проверяем, не нажимал ли пользователь паузу сам. 
-                // Обычно реклама блокирует воспроизведение. Пытаемся пустить.
-                video.play().catch(function(e){});
+                adLayer.remove();
             }
         }, 500);
+    }
+
+    // 6. ВСТАВКА ВЕРСИИ (Рабочий метод)
+    function injectInfo() {
+        var observer = new MutationObserver(function(mutations) {
+            var settingsBox = document.querySelector('.settings__content');
+            if (settingsBox && !document.querySelector('.cub-off-badge')) {
+                var badge = document.createElement('div');
+                badge.className = 'cub-off-badge';
+                badge.innerText = PLUGIN_VERSION;
+                settingsBox.appendChild(badge);
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
     }
 
     function startPlugin() {
         localStorage.setItem("region", JSON.stringify({code: "uk", time: new Date().getTime()}));
         injectCleanerCSS();
-        hackTimeouts();          // <--- Включаем перехват времени
+        hackTimeouts();          // <--- Злой хак + Таймер
         startNetworkInterceptor();
         forcePlay();
+        injectInfo();
     }
 
     if (window.appready) startPlugin();
