@@ -35,34 +35,42 @@
         });
     }
 
-    // Чтение JSON через CDN
+        // Чтение JSON через GitHub API (Самый надежный метод)
     function fetchManifest(callback) {
-        var url = MANIFEST_URL + '?t=' + Date.now();
+        var apiUrl = 'https://api.github.com/repos/' + GITHUB_USER + '/' + GITHUB_REPO + '/contents/' + FOLDER_PATH + '/plugins.json?ref=' + BRANCH + '&_t=' + Date.now();
         
-        Lampa.Network.silent(url, function(data) {
+        Lampa.Network.silent(apiUrl, function(data) {
             try {
-                // Если пришел строкой - парсим
-                var json = (typeof data === 'string') ? JSON.parse(data) : data;
-                callback(json);
+                // Если пришел JSON от API, контент внутри base64
+                if (data && data.content) {
+                    // Декодируем Base64 с поддержкой кириллицы (UTF-8)
+                    var jsonString = decodeURIComponent(escape(window.atob(data.content.replace(/\s/g, ''))));
+                    var json = JSON.parse(jsonString);
+                    callback(json);
+                } else {
+                    throw "Empty content";
+                }
             } catch (e) { 
-                console.error(e);
-                Lampa.Noty.show('Cubox: Ошибка структуры JSON'); 
+                console.error('[Cubox] API Decode Error:', e);
+                // Если API не сработало, пробуем сырой CDN
+                tryFallback(callback);
             }
         }, function(a, c) {
-            // Если CDN не сработал (файла нет), пробуем Raw как запасной вариант
-            console.warn('CDN Fail, trying Raw...');
-            var rawUrl = 'https://raw.githubusercontent.com/' + GITHUB_USER + '/' + GITHUB_REPO + '/' + BRANCH + '/' + FOLDER_PATH + '/plugins.json?t=' + Date.now();
-            
-            Lampa.Network.silent(rawUrl, function(d) {
-                try {
-                    var j = (typeof d === 'string') ? JSON.parse(d) : d;
-                    callback(j);
-                } catch(e) { Lampa.Noty.show('Cubox: Файл plugins.json не найден'); }
-            }, function() {
-                Lampa.Noty.show('Cubox: Каталог пуст или недоступен');
-            });
+            console.warn('[Cubox] API Fail:', c);
+            tryFallback(callback);
         });
     }
+
+    function tryFallback(callback) {
+         var url = 'https://cdn.jsdelivr.net/gh/' + GITHUB_USER + '/' + GITHUB_REPO + '@' + BRANCH + '/' + FOLDER_PATH + '/plugins.json?t=' + Date.now();
+         Lampa.Network.silent(url, function(d) {
+             var j = (typeof d === 'string') ? JSON.parse(d) : d;
+             callback(j);
+         }, function() {
+             Lampa.Noty.show('Cubox: Не удалось загрузить каталог');
+         });
+    }
+
 
     // Меню
     function addMenu() {
